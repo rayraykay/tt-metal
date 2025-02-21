@@ -1341,8 +1341,6 @@ void kernel_main() {
             upstream_noc_index);
     }
 
-    DPRINT << "UPSTREAM_NOC_X " << UPSTREAM_NOC_X << " UPSTREAM_NOC_Y " << UPSTREAM_NOC_Y << ENDL();
-
     // Release any held pages from the previous block
     cb_block_release_pages<
         upstream_noc_index,
