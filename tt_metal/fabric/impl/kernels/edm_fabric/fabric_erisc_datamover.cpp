@@ -366,7 +366,7 @@ FORCE_INLINE int32_t get_ptr_val(uint8_t stream_id) {
 // increment on the register. This can save precious erisc cycles by offloading a lot of pointer manipulation.
 // Additionally, these registers are accessible via eth_reg_write calls which can be used to write a value,
 // inline the eth command (without requiring source L1)
-template <uint32_t stream_id>
+template <int32_t stream_id>
 FORCE_INLINE void increment_local_update_ptr_val(int32_t val) {
     NOC_STREAM_WRITE_REG_FIELD(
         stream_id, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_UPDATE_REG_INDEX, REMOTE_DEST_BUF_WORDS_FREE_INC, val);
@@ -376,9 +376,9 @@ FORCE_INLINE void increment_local_update_ptr_val(uint8_t stream_id, int32_t val)
         stream_id, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_UPDATE_REG_INDEX, REMOTE_DEST_BUF_WORDS_FREE_INC, val);
 }
 
-template <uint32_t stream_id>
+template <int32_t stream_id>
 FORCE_INLINE void remote_update_ptr_val(int32_t val) {
-    constexpr uint32_t addr = STREAM_REG_ADDR(stream_id, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_UPDATE_REG_INDEX);
+    constexpr uint32_t addr = STREAM_REG_ADDR(stfream_id, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_UPDATE_REG_INDEX);
     internal_::eth_write_remote_reg_no_txq_check(DEFAULT_ETH_TXQ, addr, val << REMOTE_DEST_BUF_WORDS_FREE_INC);
 }
 FORCE_INLINE void remote_update_ptr_val(uint32_t stream_id, int32_t val) {
@@ -542,9 +542,14 @@ static constexpr std::array<uint32_t, NUM_SENDER_CHANNELS> to_sender_packets_com
 //   SENDER SIDE HELPERS
 /////////////////////////////////////////////
 
-template <uint8_t SENDER_NUM_BUFFERS, uint8_t RECEIVER_NUM_BUFFERS, uint8_t to_receiver_pkts_sent_id>
+template <
+    uint8_t SENDER_NUM_BUFFERS,
+    uint8_t RECEIVER_NUM_BUFFERS,
+    int SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_CH_LOCAL_CHANNEL_PACKETS_RECEIVED_STREAM_ID,
+    uint8_t to_receiver_pkts_sent_id>
 FORCE_INLINE void send_next_data(
-    tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>& sender_buffer_channel,
+    tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS, SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_CH_LOCAL_CHANNEL_PACKETS_RECEIVED_STREAM_ID>& sender_buffer_channel,
     tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>& sender_worker_interface,
     OutboundReceiverChannelPointers<RECEIVER_NUM_BUFFERS>& outbound_to_receiver_channel_pointers,
     tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>& receiver_buffer_channel,
@@ -574,6 +579,12 @@ FORCE_INLINE void send_next_data(
     // Note: We can only advance to the next buffer index if we have fully completed the send (both the payload and sync
     // messages)
     local_sender_wrptr.increment();
+    if constexpr (tt::fabric::EdmChannelWorkerInterface<
+                      SENDER_NUM_BUFFERS,
+                      SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+                      SENDER_CH_LOCAL_CHANNEL_PACKETS_RECEIVED_STREAM_ID>::USE_STREAM_REG_FOR_LOCAL) {
+        increment_local_update_ptr_val<SENDER_CH_LOCAL_CHANNEL_PACKETS_RECEIVED_STREAM_ID>(-1);
+    }
     // update the remote reg
     static constexpr uint32_t words_to_forward = 1;
     while (internal_::eth_txq_is_busy(DEFAULT_ETH_TXQ)) {
@@ -630,7 +641,7 @@ FORCE_INLINE void receiver_send_completion_ack(
 template <uint8_t SENDER_NUM_BUFFERS>
 FORCE_INLINE bool can_forward_packet_completely(
     ROUTING_FIELDS_TYPE cached_routing_fields,
-    tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>& downstream_edm_interface) {
+    tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_1_pkts_sent_id>& downstream_edm_interface) {
     // We always check if it is the terminal mcast packet value. We can do this because all unicast packets have the
     // mcast terminal value masked in to the routing field. This simplifies the check here to a single compare.
     bool deliver_locally_only;
@@ -640,7 +651,12 @@ FORCE_INLINE bool can_forward_packet_completely(
         deliver_locally_only = (cached_routing_fields.value & tt::tt_fabric::LowLatencyRoutingFields::FIELD_MASK) ==
                                tt::tt_fabric::LowLatencyRoutingFields::WRITE_ONLY;
     }
-    return deliver_locally_only || downstream_edm_interface.edm_has_space_for_packet();
+    if constexpr (to_receiver_channel_fwd_path_rdptr_id != tt::fabric::STREAM_ID_UNUSED) {
+        bool available_slots_for_downstream_edm = get_ptr_val<to_receiver_channel_fwd_path_rdptr_id>();
+        return deliver_locally_only || available_slots_for_downstream_edm > 0;
+    } else {
+        return deliver_locally_only || downstream_edm_interface.edm_has_space_for_packet();
+    }
 }
 
 // !!!WARNING!!! - MAKE SURE CONSUMER HAS SPACE BEFORE CALLING
@@ -649,7 +665,7 @@ FORCE_INLINE void receiver_forward_packet(
     // TODO: have a separate cached copy of the packet header to save some additional L1 loads
     volatile PACKET_HEADER_TYPE* packet_start,
     ROUTING_FIELDS_TYPE cached_routing_fields,
-    tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>& downstream_edm_interface,
+    tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_1_pkts_sent_id> &downstream_edm_interface,
     uint8_t transaction_id) {
     if constexpr (std::is_same_v<ROUTING_FIELDS_TYPE, tt::tt_fabric::RoutingFields>) {
         // If the packet is a terminal packet, then we can just deliver it locally
@@ -659,6 +675,11 @@ FORCE_INLINE void receiver_forward_packet(
         uint16_t payload_size_bytes = packet_start->payload_size_bytes;
         bool not_last_destination_device = cached_routing_fields.value != tt::tt_fabric::RoutingFields::LAST_MCAST_VAL;
         if (not_last_destination_device) {
+            // Remove one slot from the available number of buffer slots
+            if constexpr (to_receiver_channel_fwd_path_rdptr_id != tt::fabric::STREAM_ID_UNUSED) {
+                ASSERT(get_ptr_val<to_receiver_channel_fwd_path_rdptr_id>() > 0);
+                increment_local_update_ptr_val<to_receiver_channel_fwd_path_rdptr_id>(-1);
+            }
             forward_payload_to_downstream_edm(
                 packet_start, payload_size_bytes, cached_routing_fields, downstream_edm_interface, transaction_id);
         }
@@ -709,12 +730,15 @@ FORCE_INLINE void check_worker_connections(
             did_something = true;
             channel_connection_established = true;
             local_sender_channel_worker_interface.cache_producer_noc_addr();
-            if constexpr (enable_first_level_ack) {
-                local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(
-                    local_sender_channel_worker_interface.local_ackptr.get_ptr());
-            } else {
-                local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(
-                    local_sender_channel_worker_interface.local_rdptr.get_ptr());
+            
+            if constexpr (!tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>::USE_STREAM_REG_UPDATE_FOR_REMOTE) {
+                if constexpr (enable_first_level_ack) {
+                    local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(
+                        local_sender_channel_worker_interface.local_ackptr.get_ptr());
+                } else {
+                    local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(
+                        local_sender_channel_worker_interface.local_rdptr.get_ptr());
+                }
             }
         }
     } else if (local_sender_channel_worker_interface.has_worker_teardown_request()) {
@@ -735,10 +759,12 @@ template <
     bool enable_fabric_counters,
     uint8_t RECEIVER_NUM_BUFFERS,
     uint8_t SENDER_NUM_BUFFERS,
-    uint8_t to_receiver_pkts_sent_id>
+    uint8_t to_receiver_pkts_sent_id,
+    int SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>
 void run_sender_channel_step(
     tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>& local_sender_channel,
-    tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>& local_sender_channel_worker_interface,
+    tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID> &local_sender_channel_worker_interface,
     OutboundReceiverChannelPointers<RECEIVER_NUM_BUFFERS>& outbound_to_receiver_channel_pointers,
     tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>& remote_receiver_channel,
     volatile tt::tt_fabric::EdmFabricSenderChannelCounters* sender_channel_counters,
@@ -785,7 +811,11 @@ void run_sender_channel_step(
             to_sender_packets_completed_streams[sender_channel_index], -completions_since_last_check);
         if constexpr (!enable_first_level_ack) {
             if (channel_connection_established) {
-                local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(sender_rdptr.get_ptr());
+                if constexpr (tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>::USE_STREAM_REG_UPDATE_FOR_REMOTE) {
+                    local_sender_channel_worker_interface.send_read_credits_to_producer(completions_since_last_check);
+                } else {
+                    local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(sender_rdptr.get_ptr());
+                }
             }
         }
     }
@@ -799,7 +829,11 @@ void run_sender_channel_step(
         if (acks_since_last_check > 0) {
             sender_ackptr.increment_n(acks_since_last_check);
             if (channel_connection_established) {
-                local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(sender_ackptr.get_ptr());
+                if constexpr (tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>::USE_STREAM_REG_UPDATE_FOR_REMOTE) {
+                    local_sender_channel_worker_interface.send_read_credits_to_producer(acks_since_last_check);
+                } else {
+                    local_sender_channel_worker_interface.update_worker_copy_of_read_ptr(sender_ackptr.get_ptr());
+                }
             }
             increment_local_update_ptr_val(
                 to_sender_packets_acked_streams[sender_channel_index], -acks_since_last_check);
@@ -827,7 +861,7 @@ template <
 void run_receiver_channel_step(
     tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>& local_receiver_channel,
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>& remote_sender_channels,
-    tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>& downstream_edm_interface,
+    tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_1_pkts_sent_id> &downstream_edm_interface,
     volatile tt::tt_fabric::EdmFabricReceiverChannelCounters* receiver_channel_counters_ptr,
     std::array<tt::tt_fabric::ChannelBufferPointer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>& remote_eth_sender_wrptrs,
     ReceiverChannelPointers<RECEIVER_NUM_BUFFERS>& receiver_channel_pointers,
@@ -927,21 +961,28 @@ template <
     uint8_t RECEIVER_NUM_BUFFERS,
     size_t NUM_RECEIVER_CHANNELS,
     uint8_t SENDER_NUM_BUFFERS,
-    size_t NUM_SENDER_CHANNELS>
+    size_t NUM_SENDER_CHANNELS,
+    int SENDER_0_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_0_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID,
+    int SENDER_1_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_1_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>
 bool all_channels_drained(
     std::array<tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>, NUM_RECEIVER_CHANNELS>& local_receiver_channels,
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>& local_sender_channels,
-    std::array<tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>&
-        local_sender_channel_worker_interfaces,
+        tt::fabric::EdmChannelWorkerInterface<
+            SENDER_NUM_BUFFERS,
+            SENDER_1_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+            SENDER_1_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>>& local_sender_channel_worker_interfaces,
     std::array<ReceiverChannelPointers<RECEIVER_NUM_BUFFERS>, NUM_RECEIVER_CHANNELS>& receiver_channel_pointers) {
-    bool eth_buffers_drained = local_sender_channel_worker_interfaces[0].all_eth_packets_completed() &&
-                               local_sender_channel_worker_interfaces[1].all_eth_packets_completed() &&
-                               !local_sender_channel_worker_interfaces[0].has_unsent_payload() &&
-                               !local_sender_channel_worker_interfaces[1].has_unsent_payload() &&
-                               get_ptr_val<to_sender_packets_acked_streams[0]>() == 0 &&
-                               get_ptr_val<to_sender_packets_acked_streams[1]>() == 0 &&
-                               get_ptr_val<to_sender_packets_completed_streams[0]>() == 0 &&
-                               get_ptr_val<to_sender_packets_completed_streams[1]>() == 0;
+    bool eth_buffers_drained =         
+        std::get<0>(local_sender_channel_worker_interfaces).all_eth_packets_completed() &&
+        std::get<1>(local_sender_channel_worker_interfaces).all_eth_packets_completed() &&
+        !std::get<0>(local_sender_channel_worker_interfaces).has_unsent_payload() &&
+        !std::get<1>(local_sender_channel_worker_interfaces).has_unsent_payload() &&
+        get_ptr_val<to_sender_packets_acked_streams[0]>() == 0 &&
+        get_ptr_val<to_sender_packets_acked_streams[1]>() == 0 &&
+        get_ptr_val<to_sender_packets_completed_streams[0]>() == 0 &&
+        get_ptr_val<to_sender_packets_completed_streams[1]>() == 0;
     // Reeiver 0 enabled
     if constexpr (!dateline_connection) {
         eth_buffers_drained =
@@ -979,14 +1020,19 @@ template <
     uint8_t RECEIVER_NUM_BUFFERS,
     uint8_t NUM_RECEIVER_CHANNELS,
     uint8_t SENDER_NUM_BUFFERS,
-    size_t NUM_SENDER_CHANNELS>
+    size_t NUM_SENDER_CHANNELS,
+    int SENDER_0_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_0_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID,
+    int SENDER_1_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+    int SENDER_1_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>
 void run_fabric_edm_main_loop(
     std::array<tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>, NUM_RECEIVER_CHANNELS>& local_receiver_channels,
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>& local_sender_channels,
-    std::array<tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>&
+    std::tuple<
+        tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_0_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_0_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>,
+        tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, SENDER_1_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID, SENDER_1_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>>&
         local_sender_channel_worker_interfaces,
-    std::array<tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>, NUM_USED_RECEIVER_CHANNELS>&
-        downstream_edm_noc_interfaces,
+    tt::fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_1_pkts_sent_id> &downstream_edm_noc_interface,
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>& remote_sender_channels,
     std::array<tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>, NUM_RECEIVER_CHANNELS>& remote_receiver_channels,
     volatile tt::tt_fabric::TerminationSignal* termination_signal_ptr,
@@ -1029,7 +1075,11 @@ void run_fabric_edm_main_loop(
                 RECEIVER_NUM_BUFFERS,
                 NUM_RECEIVER_CHANNELS,
                 SENDER_NUM_BUFFERS,
-                NUM_SENDER_CHANNELS>(
+                NUM_SENDER_CHANNELS,
+                SENDER_0_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+                SENDER_0_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID,
+                SENDER_1_CH_REMOTE_PRODUCER_RDPTR_STREAM_ID,
+                SENDER_1_CH_LOCAL_PACKETS_RECEIVED_STREAM_ID>(
                 local_receiver_channels,
                 local_sender_channels,
                 local_sender_channel_worker_interfaces,
@@ -1052,7 +1102,7 @@ void run_fabric_edm_main_loop(
                 SENDER_NUM_BUFFERS,
                 to_receiver_packets_sent_streams[VC0_RECEIVER_CHANNEL]>(
                 local_sender_channels[0],
-                local_sender_channel_worker_interfaces[0],
+                std::get<0>(local_sender_channel_worker_interfaces),
                 outbound_to_receiver_channel_pointers[VC0_RECEIVER_CHANNEL],
                 remote_receiver_channels[VC0_RECEIVER_CHANNEL],
                 sender_channel_counters_ptrs[0],
@@ -1101,7 +1151,7 @@ void run_fabric_edm_main_loop(
                 SENDER_NUM_BUFFERS,
                 to_receiver_packets_sent_streams[VC0_RECEIVER_CHANNEL]>(
                 local_sender_channels[1],
-                local_sender_channel_worker_interfaces[1],
+                std::get<1>(local_sender_channel_worker_interfaces),
                 outbound_to_receiver_channel_pointers[VC0_RECEIVER_CHANNEL],
                 remote_receiver_channels[VC0_RECEIVER_CHANNEL],
                 sender_channel_counters_ptrs[1],
@@ -1116,7 +1166,7 @@ void run_fabric_edm_main_loop(
                     SENDER_NUM_BUFFERS,
                     to_receiver_packets_sent_streams[VC1_RECEIVER_CHANNEL]>(
                     local_sender_channels[2],
-                    local_sender_channel_worker_interfaces[2],
+                    std::get<2>(local_sender_channel_worker_interfaces),
                     outbound_to_receiver_channel_pointers[VC1_RECEIVER_CHANNEL],
                     remote_receiver_channels[VC1_RECEIVER_CHANNEL],
                     sender_channel_counters_ptrs[2],
@@ -1157,7 +1207,7 @@ void __attribute__((noinline)) init_local_sender_channel_worker_interfaces(
         auto connection_worker_info_ptr = reinterpret_cast<volatile tt::tt_fabric::EDMChannelWorkerLocationInfo*>(
             local_sender_connection_info_addresses[0]);
         connection_worker_info_ptr->edm_rdptr = 0;
-        new (&local_sender_channel_worker_interfaces[0]) tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>(
+        new (&local_sender_channel_worker_interfaces[0]) tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, tt::fabric::STREAM_ID_UNUSED, tt::fabric::to_downstream_sender_0_pkts_sent_id>(
             connection_worker_info_ptr,
             reinterpret_cast<volatile tt_l1_ptr uint32_t* const>(local_sender_flow_control_semaphores[0]),
             reinterpret_cast<volatile tt_l1_ptr uint32_t* const>(connection_live_semaphore_ptr));
@@ -1168,7 +1218,7 @@ void __attribute__((noinline)) init_local_sender_channel_worker_interfaces(
         auto connection_worker_info_ptr = reinterpret_cast<volatile tt::tt_fabric::EDMChannelWorkerLocationInfo*>(
             local_sender_connection_info_addresses[1]);
         connection_worker_info_ptr->edm_rdptr = 0;
-        new (&local_sender_channel_worker_interfaces[1]) tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>(
+        new (&local_sender_channel_worker_interfaces[1]) tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, to_receiver_channel_fwd_path_rdptr_id, to_downstream_sender_1_pkts_sent_id>(
             connection_worker_info_ptr,
             reinterpret_cast<volatile tt_l1_ptr uint32_t* const>(local_sender_flow_control_semaphores[1]),
             reinterpret_cast<volatile tt_l1_ptr uint32_t* const>(connection_live_semaphore_ptr));
@@ -1209,6 +1259,18 @@ void kernel_main() {
     init_ptr_val<to_sender_packets_completed_streams[0]>(0);
     init_ptr_val<to_sender_packets_completed_streams[1]>(0);
     init_ptr_val<to_sender_packets_completed_streams[2]>(0);
+
+
+    if constexpr (to_receiver_channel_fwd_path_rdptr_id != tt::fabric::STREAM_ID_UNUSED) {
+        // This stream register indicates the number of buffer slots available. We initialize to SENDER_NUM_BUFFERS accordingly
+        init_ptr_val<to_receiver_channel_fwd_path_rdptr_id>(SENDER_NUM_BUFFERS);
+    }
+    if constexpr (to_downstream_sender_1_pkts_sent_id != tt::fabric::STREAM_ID_UNUSED) {
+        init_ptr_val<to_downstream_sender_1_pkts_sent_id>(0);
+    }
+    if constexpr (tt::fabric::to_downstream_sender_0_pkts_sent_id != tt::fabric::STREAM_ID_UNUSED) {
+        init_ptr_val<tt::fabric::to_downstream_sender_0_pkts_sent_id>(0);
+    }
 
     static constexpr size_t DEFAULT_HANDSHAKE_CONTEXT_SWITCH_TIMEOUT = 0;
     if constexpr (is_handshake_sender) {
@@ -1439,7 +1501,13 @@ void kernel_main() {
     std::array<tt::tt_fabric::EthChannelBuffer<RECEIVER_NUM_BUFFERS>, NUM_RECEIVER_CHANNELS> local_receiver_channels;
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS> remote_sender_channels;
     std::array<tt::tt_fabric::EthChannelBuffer<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS> local_sender_channels;
-    std::array<tt::tt_fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS>, NUM_SENDER_CHANNELS>
+    std::tuple<
+        tt::fabric::EdmChannelWorkerInterface<
+            SENDER_NUM_BUFFERS,
+            tt::fabric::STREAM_ID_UNUSED,
+            tt::fabric::to_downstream_sender_0_pkts_sent_id>,
+        tt::fabric::EdmChannelWorkerInterface<SENDER_NUM_BUFFERS, to_receiver_channel_fwd_path_rdptr_id, to_downstream_sender_1_pkts_sent_id
+        >>
         local_sender_channel_worker_interfaces;
     std::array<size_t, NUM_SENDER_CHANNELS> local_sender_flow_control_semaphores = {
         reinterpret_cast<size_t>(sender0_worker_semaphore_ptr),
@@ -1462,7 +1530,7 @@ void kernel_main() {
     std::array<tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>, NUM_USED_RECEIVER_CHANNELS>
         downstream_edm_noc_interfaces;
     if (has_downstream_edm_vc0_buffer_connection) {
-        new (&downstream_edm_noc_interfaces[0]) tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>(
+        new (&downstream_edm_noc_interfaces[0]) tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_0_pkts_sent_id>(
             // persistent_mode -> hardcode to false because for EDM -> EDM
             //  connections we must always use semaphore lookup
             false,
@@ -1481,7 +1549,7 @@ void kernel_main() {
     }
     if constexpr (enable_ring_support) {
         if (has_downstream_edm_vc1_buffer_connection) {
-            new (&downstream_edm_noc_interfaces[1]) tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS>(
+            new (&downstream_edm_noc_interfaces[1]) tt::tt_fabric::EdmToEdmSender<SENDER_NUM_BUFFERS, to_downstream_sender_1_pkts_sent_id>(
                 // persistent_mode -> hardcode to false because for EDM -> EDM
                 //  connections we must always use semaphore lookup
                 false,
@@ -1588,7 +1656,11 @@ void kernel_main() {
         RECEIVER_NUM_BUFFERS,
         NUM_RECEIVER_CHANNELS,
         SENDER_NUM_BUFFERS,
-        NUM_SENDER_CHANNELS>(
+        NUM_SENDER_CHANNELS,
+        tt::fabric::STREAM_ID_UNUSED,
+        tt::fabric::to_downstream_sender_0_pkts_sent_id,
+        to_receiver_channel_fwd_path_rdptr_id,
+        to_downstream_sender_1_pkts_sent_id>(
         local_receiver_channels,
         local_sender_channels,
         local_sender_channel_worker_interfaces,
