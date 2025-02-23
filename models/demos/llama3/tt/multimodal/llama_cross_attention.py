@@ -292,7 +292,6 @@ class TtLlamaCrossAttention(LightweightModule):
                 dim=3,
                 math_op=ttnn.ReduceType.Sum,
                 num_links=1,
-                topology=self.configuration.ccl_topology(),
                 memory_config=ttnn.DRAM_MEMORY_CONFIG,
             )
 
@@ -383,7 +382,6 @@ class TtLlamaCrossAttention(LightweightModule):
                 dim=3,
                 math_op=ttnn.ReduceType.Sum,
                 num_links=1,
-                topology=self.configuration.ccl_topology(),
                 memory_config=ttnn.DRAM_MEMORY_CONFIG,
             )
             return dense_out_reduced
