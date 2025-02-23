@@ -13,6 +13,7 @@ from models.demos.llama3.tt.llama_common import (
     precompute_freqs,
     PagedAttentionConfig,
 )
+from models.demos.t3000.llama2_70b.reference.llama.llama31_8b.model import Attention
 from models.utility_functions import (
     comp_pcc,
     comp_allclose,
@@ -70,7 +71,7 @@ def test_llama_attention_inference(
     mesh_device.enable_async(True)
 
     model_args = TtModelArgs(mesh_device, max_batch_size=batch_size, max_seq_len=max_seq_len)
-    model_args.n_layers = 1  # For the unit test, just run a single layer
+    model_args.n_layers = 1  # For the unit test, just run a sigle layer
 
     state_dict = model_args.load_state_dict()
 
@@ -80,7 +81,7 @@ def test_llama_attention_inference(
         k[len(first_layer_prefix) :]: v for k, v in state_dict.items() if (k.startswith(first_layer_prefix))
     }
 
-    reference_model = model_args.reference_attention()
+    reference_model = Attention(args=model_args)
     reference_model.load_state_dict(partial_state_dict)
 
     seq_len = 1
@@ -96,8 +97,8 @@ def test_llama_attention_inference(
         model_args.head_dim,
         model_args.max_seq_len,
         model_args.rope_theta,
+        model_args.use_scaled_rope,
         model_args.rope_scaling_factor,
-        model_args.orig_context_len,
     )
 
     transformation_mats = rope_setup.get_both_trans_mats()
@@ -145,8 +146,8 @@ def test_llama_attention_inference(
         model_args.head_dim,
         model_args.max_seq_len * 2,
         model_args.rope_theta,
+        model_args.use_scaled_rope,
         model_args.rope_scaling_factor,
-        model_args.orig_context_len,
     )
     freqs_cis = torch.complex(cos, sin)
 
@@ -165,7 +166,7 @@ def test_llama_attention_inference(
 
     for i in range(generation_length):
         # 70B attention block typically sees tensors with mean 0 and std 0.03 - 0.05 in layer 1
-        pt_attention_input = torch.randn(batch_size, seq_len, model_args.dim)  # Qwen2.5 0.5B sees 0.1 to 2.1
+        pt_attention_input = torch.randn(batch_size, seq_len, model_args.dim) * 0.05
 
         tt_attention_input = pt_attention_input.clone()
 
@@ -208,7 +209,7 @@ def test_llama_attention_inference(
             all_tests_pass = False
 
         # Increment position
-        current_pos = torch.tensor([generation_start_pos + i + 1 for _ in range(batch_size)])
+        current_pos = torch.tensor([generation_start_pos + i for _ in range(batch_size)])
         current_pos_tensor = ttnn.from_torch(
             current_pos,
             device=mesh_device,
@@ -265,16 +266,21 @@ def test_llama_attention_inference(
                     )[:batch_size, :, :, :]
                     for cache in tt_model.layer_past
                 ]
-            for label, cache_pt, cache_tt in zip(["K", "V"], pytorch_layer_present, tt_layer_present):
-                cache_length_to_check = min(model_args.max_seq_len, generation_start_pos + i + 1)
+
+            for i, (cache_pt, cache_tt) in enumerate(zip(pytorch_layer_present, tt_layer_present)):
+                cache_length_to_check = min(model_args.max_seq_len, generation_start_pos + generation_length + 1)
                 cache_pt = cache_pt[:, :, generation_start_pos:cache_length_to_check, :]
                 cache_tt = cache_tt[:, :, generation_start_pos:cache_length_to_check, :]
                 does_pass, output_pcc = comp_pcc(cache_pt, cache_tt, pcc)
-                logger.info(f"{label} cache output: {output_pcc}")
-                if does_pass:
-                    logger.info(f"{label} cache Passed!")
+                if i == 0:
+                    logger.info(f"K cache output: {output_pcc}")
                 else:
-                    logger.warning(f"{label} Cache Failed! PCC value is lower than {pcc}")
+                    logger.info(f"V cache output: {output_pcc}")
+
+                if does_pass:
+                    logger.info(f"KV Cache Passed!")
+                else:
+                    logger.warning(f"KV Cache Failed! PCC value is lower than {pcc}")
                     all_tests_pass = False
 
     if all_tests_pass:
