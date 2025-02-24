@@ -89,6 +89,7 @@ while [[ "$found" = "false" ]]; do
    fi
    echo "::endgroup::"
 
+   ls -al tt_metal/third_party/tt_llk
    if [ $timeout_rc -eq 0 ]; then
       echo "Commit is good"
       increment=$(git bisect good)
@@ -104,6 +105,7 @@ while [[ "$found" = "false" ]]; do
       echo "${increment}"
       first_line=$(echo "${increment}" | head -n 1)
    fi
+   ls -al tt_metal/third_party/tt_llk
 
    if [[ $first_line == *"is the first bad commit"* ]]; then
       echo "FOUND IT!: " $first_line
