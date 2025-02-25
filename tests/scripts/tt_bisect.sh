@@ -74,7 +74,13 @@ while [[ "$found" = "false" ]]; do
 
    if [[ $build_rc -ne 0 ]]; then
       echo "Build failed; skipping this commit"
+      echo "debug:"
+      pwd
+      ls -al tt_metal/third_party/tt_llk || true
       git bisect skip
+      echo "debug:"
+      pwd
+      ls -al tt_metal/third_party/tt_llk || true
       continue
    fi
 
