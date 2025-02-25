@@ -65,7 +65,7 @@ jobs:
       - ${{ inputs.runner-label }}
       - ${{ inputs.extra-label }}
     container:
-      image: ${{ needs.build-artifacts.outputs.ci-build-docker-image }}
+      image: ${{ needs.build-artifacts.outputs.ci-build-docker-image || 'failed to resolve docker image' }}
       env:
         TT_METAL_HOME: /work
         PYTHONPATH: /work
