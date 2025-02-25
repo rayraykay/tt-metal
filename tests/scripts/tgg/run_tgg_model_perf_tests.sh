@@ -9,7 +9,8 @@ run_tgg_llm_tests() {
 run_tgg_cnn_tests() {
 
   echo "LOG_METAL: Running run_tgg_resnet50_tests"
-  env pytest -n auto models/demos/tgg/resnet50/tests/test_perf_e2e_resnet50.py -m "model_perf_tgg" --timeout=900 ; fail+=$?
+  env pytest -n auto models/demos/tgg/resnet50/tests/test_perf_e2e_resnet50.py::test_perf_trace_2cqs[wormhole_b0-True-mesh_device0-16-True-0.0073-60-device_params0] --timeout=900 ; fail+=$?
+  # env pytest -n auto models/demos/tgg/resnet50/tests/test_perf_e2e_resnet50.py -m "model_perf_tgg" --timeout=900 ; fail+=$?
 
   # Merge all the generated reports
   env python3 models/perf/merge_perf_results.py
