@@ -68,8 +68,7 @@ while [[ "$found" = "false" ]]; do
    fi
    git submodule update --recursive
    build_rc=0
-   # ./build_metal.sh --build-tests > /dev/null || build_rc=$?
-   build_rc=99 # FIXME
+   ./build_metal.sh --build-tests > /dev/null || build_rc=$?
    echo "::endgroup::"
 
    if [[ $build_rc -ne 0 ]]; then
@@ -77,10 +76,12 @@ while [[ "$found" = "false" ]]; do
       echo "debug:"
       pwd
       ls -al tt_metal/third_party/tt_llk || true
+      git status || true
       git bisect skip
       echo "debug:"
       pwd
       ls -al tt_metal/third_party/tt_llk || true
+      git status || true
       continue
    fi
 
