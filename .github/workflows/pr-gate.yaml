@@ -11,6 +11,9 @@ name: PR Gate
 # - Individual test cases must be less than 1s.
 
 on:
+  push:
+    branches:
+      - "afuller/pr-gate-on-wormhole"
   workflow_dispatch:
   pull_request:
     types:
