@@ -326,8 +326,10 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 inc/wormhole/noc/noc_overlay_parameters.h
                 inc/wormhole/noc/noc_parameters.h
                 inc/wormhole/noc_nonblocking_api.h
+                inc/wormhole/stream_interface.h
                 inc/wormhole/stream_io_map.h
                 inc/wormhole/tdma_xmov.h
+                inc/wormhole/tensix.h
     )
 endif()
 
