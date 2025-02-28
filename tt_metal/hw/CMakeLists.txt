@@ -332,6 +332,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 inc/wormhole/tensix.h
                 inc/wormhole/wormhole_b0_defines/cfg_defines.h
                 inc/wormhole/wormhole_b0_defines/tensix_types.h
+                inc/dataflow_api_addrgen.h
     )
 endif()
 
