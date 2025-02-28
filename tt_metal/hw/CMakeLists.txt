@@ -336,6 +336,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 inc/dataflow_api_common.h
                 # Toolchain
                 toolchain/erisc-b0-app.ld
+                toolchain/erisc-b0-memory.ld
     )
 endif()
 
