@@ -38,4 +38,5 @@ target_link_libraries(
         Tracy::TracyClient
         TT::Metalium::HostDevCommon
         yaml-cpp::yaml-cpp
+        Boost::asio
 )
