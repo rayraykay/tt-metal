@@ -17,10 +17,11 @@ jobs:
       matrix:
         runs-on: [
           "N150",
-          "P150"
+          # "P150"
         ]
     runs-on:
-      - in-service
+      # - in-service
+      - issue-afuller
       - cloud-virtual-machine
       - ${{ matrix.runs-on }}
     container:
