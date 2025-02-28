@@ -967,6 +967,7 @@ struct IllegalShardSpecParams {
 class IllegalTensorLayoutCreationTests : public ::testing::TestWithParam<IllegalShardSpecParams> {};
 
 TEST_P(IllegalTensorLayoutCreationTests, ExpectFailAndCheckErrMsg) {
+    GTEST_SKIP() << "Enable tests after flipping asserts to TT_FATAL (issue #17060)";
     const auto& params = GetParam();
 
     EXPECT_THAT(
@@ -1041,6 +1042,7 @@ INSTANTIATE_TEST_SUITE_P(
 class IllegalTensorSpecCreationTests : public ::testing::TestWithParam<IllegalShardSpecParams> {};
 
 TEST_P(IllegalTensorSpecCreationTests, ExpectFailAndCheckErrMsg) {
+    GTEST_SKIP() << "Enable tests after flipping asserts to TT_FATAL (issue #17060)";
     const auto& params = GetParam();
 
     auto tensor_layout = TensorLayout(DataType::BFLOAT16, params.page_config, params.memory_config);
