@@ -330,6 +330,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 inc/wormhole/stream_io_map.h
                 inc/wormhole/tdma_xmov.h
                 inc/wormhole/tensix.h
+                inc/wormhole/wormhole_b0_defines/cfg_defines.h
+                inc/wormhole/wormhole_b0_defines/tensix_types.h
     )
 endif()
 
