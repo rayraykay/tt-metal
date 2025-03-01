@@ -15,15 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runs-on: [
+        platform: [
           "N150",
-          # "P150"
+          "P150"
         ]
     runs-on:
-      # - in-service
-      - issue-afuller
+      - in-service
       - cloud-virtual-machine
-      - ${{ matrix.runs-on }}
+      - ${{ matrix.platform }}
     container:
       image: ${{ inputs.docker-image || 'docker-image-unresolved!'}}
       volumes:
@@ -63,7 +62,7 @@ jobs:
         uses: phoenix-actions/test-reporting@v15
         if: ${{ !cancelled() }}
         with:
-          name: Metalium Blackhole smoke tests
+          name: Metalium ${{ matrix.platform }} smoke tests
           path: /work/test-reports/*.xml
           reporter: jest-junit
 
