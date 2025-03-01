@@ -258,6 +258,27 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 ckernels/blackhole/metal/llk_io/llk_io_unpack.h
                 ckernels/blackhole/metal/llk_io/llk_operands.h
                 ckernels/blackhole/metal/llk_io/llk_outputs.h
+                ckernels/wormhole_b0/metal/common/chlkc_list.h
+                ckernels/wormhole_b0/metal/llk_api/llk_math_common_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_math_matmul_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_math_unary_datacopy_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_pack_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_param_structs.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/ckernel_sfpu_converter.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/ckernel_sfpu_exp.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/ckernel_sfpu_recip.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/llk_math_eltwise_unary_sfpu_exp.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/llk_math_eltwise_unary_sfpu_init.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu/llk_math_eltwise_unary_sfpu_params.h
+                ckernels/wormhole_b0/metal/llk_api/llk_sfpu_types.h
+                ckernels/wormhole_b0/metal/llk_api/llk_unpack_AB_matmul_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_unpack_A_api.h
+                ckernels/wormhole_b0/metal/llk_api/llk_unpack_common_api.h
+                ckernels/wormhole_b0/metal/llk_io/llk_io.h
+                ckernels/wormhole_b0/metal/llk_io/llk_io_pack.h
+                ckernels/wormhole_b0/metal/llk_io/llk_io_unpack.h
+                ckernels/wormhole_b0/metal/llk_io/llk_operands.h
+                ckernels/wormhole_b0/metal/llk_io/llk_outputs.h
                 inc/atomic_rwptr.h
                 inc/bit_utils.h
                 inc/blackhole/c_tensix_core.h
