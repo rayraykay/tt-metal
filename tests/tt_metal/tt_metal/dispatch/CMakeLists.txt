@@ -8,7 +8,9 @@ target_sources(
         dispatch_buffer/test_sub_device.cpp
         dispatch_event/test_EnqueueWaitForEvent.cpp
         dispatch_event/test_events.cpp
+        dispatch_program/test_dispatch.cpp
         dispatch_program/test_dispatch_stress.cpp
+        dispatch_program/test_global_circular_buffers.cpp
         dispatch_program/test_program_reuse.cpp
         dispatch_program/test_sub_device.cpp
         dispatch_util/test_device_command.cpp
@@ -35,8 +37,6 @@ target_sources(
     PRIVATE
         dispatch_buffer/test_EnqueueWriteBuffer_and_EnqueueReadBuffer.cpp
         dispatch_program/test_EnqueueProgram.cpp
-        dispatch_program/test_dispatch.cpp
-        dispatch_program/test_global_circular_buffers.cpp
         dispatch_trace/test_EnqueueTrace.cpp
         dispatch_trace/test_sub_device.cpp
 )
