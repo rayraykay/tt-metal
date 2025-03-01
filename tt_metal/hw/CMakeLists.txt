@@ -359,6 +359,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
                 toolchain/erisc-b0-app.ld
                 toolchain/erisc-b0-app-sections.ld
                 toolchain/erisc-b0-memory.ld
+                toolchain/erisc-b0-kernel.ld
                 toolchain/tensix-address.ld
     )
 endif()
