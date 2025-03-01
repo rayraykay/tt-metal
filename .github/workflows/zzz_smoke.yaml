@@ -11,7 +11,7 @@ on:
         type: string
 
 jobs:
-  metal-tests:
+  metalium-smoke:
     strategy:
       fail-fast: false
       matrix:
