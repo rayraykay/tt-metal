@@ -17,7 +17,8 @@ jobs:
       matrix:
         platform: [
           "N150",
-          "P150"
+          "N300",
+          # "P150" # Machines aren't ready yet
         ]
     runs-on:
       - in-service
