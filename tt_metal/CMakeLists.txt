@@ -191,6 +191,7 @@ target_sources(
             impl/dispatch/kernels/packet_demux.cpp
             impl/dispatch/kernels/vc_packet_router.cpp
             impl/dispatch/kernels/vc_eth_tunneler.cpp
+            impl/dispatch/kernels/packet_mux.cpp
             kernels/compute/blank.cpp
             kernels/compute/eltwise_binary.cpp
             kernels/compute/eltwise_sfpu.cpp
