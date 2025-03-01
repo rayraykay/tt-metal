@@ -189,6 +189,7 @@ target_sources(
             impl/dispatch/kernels/cq_dispatch_slave.cpp
             impl/dispatch/kernels/cq_prefetch.cpp
             impl/dispatch/kernels/packet_demux.cpp
+            impl/dispatch/kernels/vc_packet_router.cpp
             kernels/compute/blank.cpp
             kernels/compute/eltwise_binary.cpp
             kernels/compute/eltwise_sfpu.cpp
