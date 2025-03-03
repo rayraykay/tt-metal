@@ -7,6 +7,7 @@ from .distributed import (
     DispatchCoreType,
     open_mesh_device,
     close_mesh_device,
+    synchronize_mesh_device,
     get_num_pcie_devices,
     get_num_devices,
     get_pcie_device_ids,

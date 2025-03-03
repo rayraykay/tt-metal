@@ -268,9 +268,9 @@ inline auto& create_or_get_meshworkload_from_cache(
                 program_factory_t::override_runtime_arguments(
                     adapter, operation_attributes, tensor_args, tensor_return_value);
 
-                adapter.program.set_runtime_id(device_operation_id);
+                // adapter.program.set_runtime_id(device_operation_id);
 
-                tt::tt_metal::GraphTracker::instance().track_program(&adapter.program, mesh_device);
+                // tt::tt_metal::GraphTracker::instance().track_program(&adapter.program, mesh_device);
 
                 // Return the mesh workload from the cached factory
                 return adapter.get_cached_mesh_workload().workload;

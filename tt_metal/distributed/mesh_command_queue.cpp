@@ -17,7 +17,7 @@
 #include "tt_metal/impl/dispatch/dispatch_query_manager.hpp"
 #include "tt_metal/common/thread_pool.hpp"
 #include "tt_cluster.hpp"
-
+#include <thread>
 namespace tt::tt_metal::distributed {
 
 struct MeshReadEventDescriptor {
@@ -33,6 +33,27 @@ MeshCommandQueue::MeshCommandQueue(MeshDevice* mesh_device, uint32_t id, std::sh
         config_buffer_mgr_, expected_num_workers_completed_, DispatchSettings::DISPATCH_MESSAGE_ENTRIES);
     this->populate_virtual_program_dispatch_core();
     this->populate_dispatch_core_type();
+    std::mutex mutex;
+    auto affinity_lambda = std::function<void(uint32_t)>([&mutex](uint32_t thread_idx) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(2 * thread_idx, &cpuset);
+        pthread_t current_thread = pthread_self();
+        int rc = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (rc != 0) {
+                std::cerr << "Error setting affinity for thread " << thread_idx << ": " << strerror(rc) << std::endl;
+            } else {
+                std::cout << "Thread " << thread_idx << " bound to " << thread_idx + 8 << std::endl;
+            }
+        }
+    });
+
+    for (int i = 0; i < 8; i++) {
+        thread_pool_->enqueue([&affinity_lambda, i]() { affinity_lambda(i); });
+    }
+    thread_pool_->wait();
 }
 
 MeshCommandQueue::~MeshCommandQueue() {
@@ -587,18 +608,41 @@ void MeshCommandQueue::write_program_cmds_to_subgrid(
     bool stall_before_program,
     std::unordered_set<uint32_t>& chip_ids_in_workload) {
     auto dispatch_core_config = DispatchQueryManager::instance().get_dispatch_core_config();
-    CoreType dispatch_core_type = dispatch_core_config.get_core_type();
+    auto dispatch_core_type = dispatch_core_config.get_core_type();
 
-    for (const auto& coord : sub_grid) {
-        program_dispatch::write_program_command_sequence(
-            program_cmd_seq,
-            this->mesh_device_->get_device(coord)->sysmem_manager(),
-            id_,
-            dispatch_core_type,
-            stall_first,
-            stall_before_program);
+    for (auto& coord : sub_grid) {
         chip_ids_in_workload.insert(this->mesh_device_->get_device(coord)->id());
     }
+
+    uint32_t num_cols = 2;  // sub_grid.end_coord().coords()[1] - sub_grid.start_coord().coords()[1] + 1;
+    uint32_t num_chips_per_col = chip_ids_in_workload.size() / num_cols;
+    auto dispatch_lambda = std::function<void(uint32_t)>([&chip_ids_in_workload,
+                                                          &program_cmd_seq,
+                                                          num_chips_per_col,
+                                                          dispatch_core_type,
+                                                          stall_first,
+                                                          stall_before_program,
+                                                          this](uint32_t thread_idx) mutable {
+        uint32_t start_idx = thread_idx * num_chips_per_col;
+        auto coord = chip_ids_in_workload.begin();
+        std::advance(coord, start_idx);
+        for (uint32_t i = 0; i < num_chips_per_col; i++) {
+            program_dispatch::write_program_command_sequence(
+                program_cmd_seq,
+                this->mesh_device_->get_device(*coord)->sysmem_manager(),
+                id_,
+                dispatch_core_type,
+                stall_first,
+                stall_before_program);
+            std::advance(coord, 1);
+        }
+    });
+
+    for (uint32_t thread_idx = 0; thread_idx < num_cols; thread_idx++) {
+        thread_pool_->enqueue([&dispatch_lambda, thread_idx]() mutable { dispatch_lambda(thread_idx); });
+    }
+    // Barrier
+    thread_pool_->wait();
 }
 
 void MeshCommandQueue::write_go_signal_to_unused_sub_grids(

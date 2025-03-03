@@ -177,6 +177,10 @@ def close_mesh_device(mesh_device):
     return ttnn._ttnn.multi_device.close_mesh_device(mesh_device)
 
 
+def synchronize_mesh_device(mesh_device):
+    return ttnn._ttnn.multi_device.synchronize_mesh_device(mesh_device)
+
+
 @contextlib.contextmanager
 def create_mesh_device(*args, **kwargs):
     """

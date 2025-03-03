@@ -122,7 +122,7 @@ MeshDevice::MeshDevice(
     view_(std::move(mesh_device_view)),
     mesh_id_(generate_unique_mesh_id()),
     parent_mesh_(std::move(parent_mesh)),
-    thread_pool_(create_boost_thread_pool(view_->shape().mesh_size())) {}
+    thread_pool_(create_custom_thread_pool(view_->shape().mesh_size())) {}
 
 std::shared_ptr<MeshDevice> MeshDevice::create(
     const MeshDeviceConfig& config,
@@ -685,9 +685,13 @@ void MeshDevice::init_fabric() {
     TT_THROW("init_fabric_program() is not supported on MeshDevice - use individual devices instead");
     reference_device()->init_fabric();
 }
+
 void MeshDevice::synchronize() {
-    // Nothing to synchronize, as all work is executed by MeshDevice is synchronous.
+    for (auto& cq : mesh_command_queues_) {
+        cq->finish();
+    }
 }
+
 WorkExecutorMode MeshDevice::get_worker_mode() { return WorkExecutorMode::SYNCHRONOUS; }
 bool MeshDevice::is_worker_queue_empty() const { return true; }
 void MeshDevice::push_work(std::function<void()> work, bool blocking) {

@@ -373,6 +373,8 @@ void py_module(py::module& module) {
         py::arg("dispatch_core_config"));
 
     module.def("close_mesh_device", &close_mesh_device, py::arg("mesh_device"), py::kw_only());
+    module.def("synchronize_mesh_device", &synchronize_mesh_device, py::arg("mesh_device"), py::kw_only());
+
     module.def(
         "get_device_tensor",
         py::overload_cast<const Tensor&, int>(&ttnn::distributed::get_device_tensor),

@@ -80,10 +80,10 @@ HWCommandQueue::HWCommandQueue(IDevice* device, uint32_t id, NOC noc_index, uint
     this->completion_queue_writer_core_ = CoreCoord(completion_q_writer_location.x, completion_q_writer_location.y);
 
     this->exit_condition = false;
-    std::thread completion_queue_thread = std::thread(&HWCommandQueue::read_completion_queue, this);
-    this->completion_queue_thread = std::move(completion_queue_thread);
+    // std::thread completion_queue_thread = std::thread(&HWCommandQueue::read_completion_queue, this);
+    // this->completion_queue_thread = std::move(completion_queue_thread);
     // Set the affinity of the completion queue reader.
-    set_device_thread_affinity(this->completion_queue_thread, this->completion_queue_reader_core);
+    // set_device_thread_affinity(this->completion_queue_thread, this->completion_queue_reader_core);
     program_dispatch::reset_config_buf_mgrs_and_expected_workers(
         this->config_buffer_mgr, this->expected_num_workers_completed, DispatchSettings::DISPATCH_MESSAGE_ENTRIES);
 }
@@ -126,20 +126,20 @@ void HWCommandQueue::set_go_signal_noc_data_and_dispatch_sems(
 
 HWCommandQueue::~HWCommandQueue() {
     ZoneScopedN("HWCommandQueue_destructor");
-    if (this->exit_condition) {
-        this->completion_queue_thread.join();  // We errored out already prior
-    } else {
-        TT_ASSERT(
-            this->issued_completion_q_reads.empty(),
-            "There should be no reads in flight after closing our completion queue thread");
-        TT_ASSERT(
-            this->num_entries_in_completion_q == this->num_completed_completion_q_reads,
-            "There shouldn't be any commands in flight after closing our completion queue thread. Num uncompleted "
-            "commands: {}",
-            this->num_entries_in_completion_q - this->num_completed_completion_q_reads);
-        this->set_exit_condition();
-        this->completion_queue_thread.join();
-    }
+    // if (this->exit_condition) {
+    //     this->completion_queue_thread.join();  // We errored out already prior
+    // } else {
+    //     TT_ASSERT(
+    //         this->issued_completion_q_reads.empty(),
+    //         "There should be no reads in flight after closing our completion queue thread");
+    //     TT_ASSERT(
+    //         this->num_entries_in_completion_q == this->num_completed_completion_q_reads,
+    //         "There shouldn't be any commands in flight after closing our completion queue thread. Num uncompleted "
+    //         "commands: {}",
+    //         this->num_entries_in_completion_q - this->num_completed_completion_q_reads);
+    //     this->set_exit_condition();
+    //     this->completion_queue_thread.join();
+    // }
 }
 
 void HWCommandQueue::increment_num_entries_in_completion_q() {

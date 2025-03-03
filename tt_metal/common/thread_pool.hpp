@@ -17,5 +17,6 @@ public:
 };
 
 std::shared_ptr<ThreadPool> create_boost_thread_pool(int num_threads);
+std::shared_ptr<ThreadPool> create_custom_thread_pool(int num_threads);
 
 }  // namespace tt::tt_metal

@@ -23,6 +23,8 @@ std::shared_ptr<MeshDevice> open_mesh_device(
 
 void close_mesh_device(const std::shared_ptr<MeshDevice>& mesh_device);
 
+void synchronize_mesh_device(const std::shared_ptr<MeshDevice>& mesh_device);
+
 // Given a multi-device tensor, returns a list of individual per-device tensors.
 std::vector<ttnn::Tensor> get_device_tensors(const ttnn::Tensor& tensor);
 
