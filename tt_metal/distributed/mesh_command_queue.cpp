@@ -18,12 +18,23 @@
 #include "tt_metal/common/thread_pool.hpp"
 #include "tt_cluster.hpp"
 #include <thread>
+#include <numa.h>
+
 namespace tt::tt_metal::distributed {
 
 struct MeshReadEventDescriptor {
     ReadEventDescriptor single_device_descriptor;
     MeshCoordinateRange device_range;
 };
+
+std::unordered_map<int, std::vector<uint32_t>> get_cpu_cores_per_numa_node() {
+    std::unordered_map<int, std::vector<uint32_t>> cpu_cores_per_numa_node = {};
+    for (int cpu = 0; cpu < numa_num_configured_cpus(); ++cpu) {
+        int node = numa_node_of_cpu(cpu);
+        cpu_cores_per_numa_node[node].push_back(cpu);
+    }
+    return cpu_cores_per_numa_node;
+}
 
 MeshCommandQueue::MeshCommandQueue(MeshDevice* mesh_device, uint32_t id, std::shared_ptr<ThreadPool>& thread_pool) :
     thread_pool_(thread_pool) {
@@ -33,20 +44,22 @@ MeshCommandQueue::MeshCommandQueue(MeshDevice* mesh_device, uint32_t id, std::sh
         config_buffer_mgr_, expected_num_workers_completed_, DispatchSettings::DISPATCH_MESSAGE_ENTRIES);
     this->populate_virtual_program_dispatch_core();
     this->populate_dispatch_core_type();
-    std::mutex mutex;
-    auto affinity_lambda = std::function<void(uint32_t)>([&mutex](uint32_t thread_idx) {
+
+    auto cpu_cores_per_numa_node = get_cpu_cores_per_numa_node();
+    auto affinity_lambda = std::function<void(uint32_t)>([&mutex, &cpu_cores_per_numa_node](uint32_t thread_idx) {
+        uint32_t numa_node_for_thread = thread_idx % cpu_cores_per_numa_node.size();
+        auto& candidate_cores_for_thread = cpu_cores_per_numa_node[numa_node_for_thread];
+        uint32_t cpu_core_for_thread = candidate_cores_for_thread[thread_idx % candidate_cores_for_thread.size()];
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(2 * thread_idx, &cpuset);
+        CPU_SET(cpu_core_for_thread, &cpuset);
         pthread_t current_thread = pthread_self();
         int rc = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (rc != 0) {
-                std::cerr << "Error setting affinity for thread " << thread_idx << ": " << strerror(rc) << std::endl;
-            } else {
-                std::cout << "Thread " << thread_idx << " bound to " << thread_idx + 8 << std::endl;
-            }
+        if (rc) {
+            log_warning(
+                tt::LogMetal,
+                "Unable to bind main thread to free CPU cores. May see performance degradation. Error Code: {}",
+                rc);
         }
     });
 
