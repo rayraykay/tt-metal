@@ -13,7 +13,7 @@ from models.utility_functions import run_for_wormhole_b0
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 24576}], indirect=True)
 @pytest.mark.parametrize(
     "device_batch_size, enable_async_mode, expected_inference_time, expected_compile_time",
-    ((16, True, 0.0100, 60),),
+    ((16, False, 0.0100, 60),),
     indirect=["enable_async_mode"],
 )
 def test_perf(
@@ -26,7 +26,7 @@ def test_perf(
     enable_async_mode,
     model_location_generator,
 ):
-    mode = "async" if enable_async_mode else "sync"
+    mode = "sync"
     run_perf_resnet(
         device_batch_size,
         expected_inference_time,
@@ -43,7 +43,7 @@ def test_perf(
 @pytest.mark.parametrize("device_params", [{"l1_small_size": 32768, "trace_region_size": 1500000}], indirect=True)
 @pytest.mark.parametrize(
     "device_batch_size, enable_async_mode, expected_inference_time, expected_compile_time",
-    ((16, True, 0.0057, 60),),
+    ((16, False, 0.0057, 60),),
     indirect=["enable_async_mode"],
 )
 def test_perf_trace(
@@ -56,7 +56,7 @@ def test_perf_trace(
     enable_async_mode,
     model_location_generator,
 ):
-    mode = "async" if enable_async_mode else "sync"
+    mode = "sync"
     run_perf_resnet(
         device_batch_size,
         expected_inference_time,
@@ -105,7 +105,7 @@ def test_perf_2cqs(
 )
 @pytest.mark.parametrize(
     "device_batch_size, enable_async_mode, expected_inference_time, expected_compile_time",
-    ((16, True, 0.0043, 60),),
+    ((16, False, 0.0043, 60),),
     indirect=["enable_async_mode"],
 )
 def test_perf_trace_2cqs(
@@ -118,7 +118,7 @@ def test_perf_trace_2cqs(
     enable_async_mode,
     model_location_generator,
 ):
-    mode = "async" if enable_async_mode else "sync"
+    mode = "sync"
     run_perf_resnet(
         device_batch_size,
         expected_inference_time,

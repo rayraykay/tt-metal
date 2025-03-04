@@ -29,7 +29,6 @@ Tensor create_mask(const Tensor& input_a, const std::optional<MemoryConfig>& out
 Tensor ArgmaxOperation::invoke(
     const Tensor& input, int64_t _dim, bool all, const std::optional<MemoryConfig>& output_mem_config) {
     auto output_memory_config = output_mem_config.value_or(input.memory_config());
-    std::cout << "Running argmax" << std::endl;
     auto input_shape = input.get_padded_shape();
     TT_FATAL(input_shape.rank() == 4, "supported for rank-4 tensors at this time");
 

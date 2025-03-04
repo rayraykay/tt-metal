@@ -102,7 +102,6 @@ ttnn::Tensor permute_launch(
     const ttnn::SmallVector<uint32_t>& dims,
     const MemoryConfig& output_mem_config,
     const std::optional<float>& pad_value) {
-    std::cout << "Running permute" << std::endl;
     return permute_impl(a, dims, output_mem_config, pad_value);
 }
 

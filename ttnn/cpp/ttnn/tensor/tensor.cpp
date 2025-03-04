@@ -279,8 +279,6 @@ void Tensor::deallocate_impl(bool force, bool deallocation_through_destructor) {
                                 using type = std::decay_t<decltype(s)>;
                                 if constexpr (std::is_same_v<type, DeviceStorage>) {
                                     if (s.mesh_buffer != nullptr and (force or s.mesh_buffer.use_count() == 1)) {
-                                        // std::cout << "Deallocate Mesh Buffer at: " << s.mesh_buffer->address()
-                                        //             << std::endl;
                                         s.mesh_buffer->deallocate();
                                     } else if (force or s.buffer.use_count() == 1) {
                                         if (s.buffer) {
@@ -812,44 +810,34 @@ Tensor allocate_tensor_on_mesh(const TensorSpec& tensor_spec, distributed::MeshD
 
 void write_tensor(const Tensor& host_tensor, Tensor device_tensor, QueueId cq_id) {
     // Top level wrapper to copy a host tensor to a preallocated device tensor
-    std::cout << "Calling write tensor" << std::endl;
     TT_ASSERT(device_tensor.workers.size(), "Workers must be specified for device_tensor in write_tensor");
 
     Tensor async_safe_tensor = copy_borrowed_tensor_in_async_mode(device_tensor.workers.at(0), host_tensor);
-    std::cout << "Done copy" << std::endl;
     TT_FATAL(
         async_safe_tensor.storage_type() == StorageType::BORROWED or
             async_safe_tensor.storage_type() == StorageType::OWNED or
             async_safe_tensor.storage_type() == StorageType::MULTI_DEVICE_HOST,
         "write_tensor only supports host_tensor to device_tensor data transfer");
-    std::cout << "Host checked" << std::endl;
     TT_FATAL(
         device_tensor.storage_type() == StorageType::DEVICE,
         "write_tensor only supports host_tensor to device_tensor data transfer");
-    std::cout << "Device checked" << std::endl;
     TT_FATAL(async_safe_tensor.get_logical_shape() == device_tensor.get_logical_shape(), "Error");
     TT_FATAL(async_safe_tensor.get_dtype() == device_tensor.get_dtype(), "Error");
     TT_FATAL(
         async_safe_tensor.get_tensor_spec().page_config() == device_tensor.get_tensor_spec().page_config(), "Error");
-    std::cout << "Metadata checked" << std::endl;
     auto& device_storage = std::get<DeviceStorage>(device_tensor.get_storage());
-    std::cout << "Have mesh buffer: " << (device_storage.mesh_buffer != nullptr) << std::endl;
     if (auto mesh_buffer = device_storage.mesh_buffer; mesh_buffer != nullptr) {
-        std::cout << "Writing to mesh device" << std::endl;
         auto* mesh_device = mesh_buffer->device();
         std::vector<void*> host_data = std::visit(
             tt::stl::overloaded{
                 [](BorrowedStorage s) {
-                    std::cout << "Get borrowed" << std::endl;
                     return std::visit([](auto&& b) { return std::vector<void*>{b.data()}; }, s.buffer);
                 },
                 [](OwnedStorage s) {
-                    std::cout << "Get owned" << std::endl;
                     return std::visit(
                         [](auto&& b) { return std::vector<void*>{static_cast<void*>(b.begin())}; }, s.buffer);
                 },
                 [](const MultiDeviceHostStorage& host_storage) {
-                    std::cout << "Get Multi device host" << std::endl;
                     std::vector<void*> host_data;
                     for (int i = 0; i < host_storage.num_buffers(); ++i) {
                         host_data.push_back(std::visit(
@@ -860,7 +848,6 @@ void write_tensor(const Tensor& host_tensor, Tensor device_tensor, QueueId cq_id
                 [](auto&&) -> std::vector<void*> { TT_THROW("Unreachable"); },
             },
             async_safe_tensor.get_storage());
-        std::cout << "Setup tensors" << std::endl;
         std::vector<distributed::MeshCommandQueue::ShardDataTransfer> shard_data_transfers;
         shard_data_transfers.reserve(host_data.size());
 
@@ -868,14 +855,12 @@ void write_tensor(const Tensor& host_tensor, Tensor device_tensor, QueueId cq_id
 
         distributed::MeshCoordinateRange coord_range(mesh_shape);
         auto shard_coord = coord_range.begin();
-        std::cout << "Setup transfers" << std::endl;
         for (int i = 0; i < host_data.size(); ++shard_coord, i++) {
             shard_data_transfers.push_back(distributed::MeshCommandQueue::ShardDataTransfer{
                 .shard_coord = *shard_coord,
                 .host_data = host_data[i],
             });
         }
-        std::cout << "Write shards" << std::endl;
         mesh_device->mesh_command_queue().enqueue_write_shards(mesh_buffer, shard_data_transfers, /*blocking=*/false);
         return;
     }

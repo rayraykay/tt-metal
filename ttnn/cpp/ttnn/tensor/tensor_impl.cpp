@@ -802,19 +802,16 @@ Tensor to_device_mesh_tensor(
         tensor.get_logical_shape(), tensor.get_tensor_spec().tensor_layout().with_memory_config(memory_config));
     if (tensor_spec.tensor_layout().get_memory_config().buffer_type == BufferType::L1 or
         tensor_spec.tensor_layout().get_memory_config().buffer_type == BufferType::L1_SMALL) {
-        std::cout << "Call allocate_mesh_buffer_on_device in to_device" << std::endl;
     }
     auto mesh_buffer = allocate_mesh_buffer_on_device(mesh_device, tensor_spec);
     DeviceStorage mesh_storage = std::visit(
         tt::stl::overloaded{
             [&mesh_device, &mesh_buffer, &tensor_spec]<OwnedOrBorrowedStorage StorageType>(const StorageType& storage) {
                 // Replicate data across devices in a mesh.
-                // std::cout << "Replicating mesh buffer" << std::endl;
                 return replicate_to_mesh_buffer<T>(storage, mesh_device, mesh_buffer, tensor_spec);
             },
             [&mesh_device, &mesh_buffer, &tensor_spec](const MultiDeviceHostStorage& storage) {
                 // Shard multi device host shards across devices in a mesh..
-                // std::cout << "Sharding mesh buffer" << std::endl;
                 return shard_to_mesh_buffer<T>(storage, mesh_device, mesh_buffer, tensor_spec);
             },
             [](const auto& s) -> DeviceStorage { TT_THROW("Unexpected storage type {}", tt::stl::get_type_name(s)); }},

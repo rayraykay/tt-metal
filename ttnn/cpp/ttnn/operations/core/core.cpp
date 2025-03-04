@@ -93,12 +93,10 @@ ttnn::Tensor allocate_tensor_on_device(
 }
 
 ttnn::Tensor allocate_tensor_on_device(const ttnn::TensorSpec& spec, IDevice* device) {
-    std::cout << "Calling allocate 1" << std::endl;
     return tt::tt_metal::allocate_tensor_on_devices(spec, {device});
 }
 
 ttnn::Tensor allocate_tensor_on_device(const ttnn::TensorSpec& spec, MeshDevice* mesh_device) {
-    std::cout << "Calling allocate 2" << std::endl;
     return tt::tt_metal::allocate_tensor_on_devices(spec, {mesh_device});
 }
 

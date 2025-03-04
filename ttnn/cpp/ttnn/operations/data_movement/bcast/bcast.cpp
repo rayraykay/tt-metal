@@ -23,7 +23,6 @@ Tensor BcastOperation::invoke(
     using tt::constants::TILE_WIDTH;
 
     auto output_memory_config = memory_config.value_or(input_tensor_a.memory_config());
-    std::cout << "Running bcast" << std::endl;
     if (bcast_dim == BcastOpDim::W) {
         TT_FATAL(input_tensor_a.get_padded_shape()[-2] == input_tensor_b.get_padded_shape()[-2], "Error");
         if (input_tensor_b.get_layout() == Layout::TILE) {

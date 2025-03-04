@@ -194,7 +194,6 @@ Tensor reduce(
         MathFidelity::HiFi4,
         /*default_approx_mode=*/false,
         /*default_fp32_acc=*/true));
-    std::cout << "Running reduce" << std::endl;
     if (is_multicore_hw) {
         IDevice* device;
 

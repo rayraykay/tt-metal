@@ -420,8 +420,6 @@ Pool2D::MultiCore::cached_program_t Pool2D::MultiCore::create(
     log_debug(tt::LogOp, "reader_indices shape: {}", reader_indices.logical_shape());
     auto reader_indices_on_device =
         sliding_window::move_config_tensor_to_device(reader_indices, parallel_config, is_block_sharded, input.device());
-    std::cout << "Moving pool config buf to device"
-              << std::get<DeviceStorage>(reader_indices_on_device.storage()).get_mesh_buffer()->address() << std::endl;
 
     auto in_n = sliding_window_config.batch_size;
     auto in_h = sliding_window_config.input_hw.first;

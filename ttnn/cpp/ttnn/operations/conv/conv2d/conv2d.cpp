@@ -52,7 +52,6 @@ Result conv2d(
     const std::optional<const Conv2dConfig>& conv_config_,
     const std::optional<const DeviceComputeKernelConfig>& compute_config_,
     const std::optional<const MemoryConfig>& memory_config) {
-    std::cout << "Running C++ conv" << std::endl;
     Conv2dConfig conv_config = conv_config_.value_or(Conv2dConfig());
     const bool mm_conv = use_matmul_for_1x1_conv(kernel_size, stride, padding, dilation, groups, conv_config);
     const uint32_t output_height =
@@ -91,7 +90,6 @@ Result conv2d(
 
     ShardOrientation shard_orientation =
         conv_config.transpose_shards ? ShardOrientation::COL_MAJOR : ShardOrientation::ROW_MAJOR;
-    std::cout << "shard" << std::endl;
     auto [input_tensor_post_tm, parallel_config, output_parallel_config] = shard_or_reshard_tensor_if_required(
         device,
         input_tensor,
@@ -122,7 +120,6 @@ Result conv2d(
     std::optional<ttnn::Tensor> bias_tensor_on_device = bias_tensor;
     if (!weight_is_on_device) {
         // prepare weights in desired layout and move to device
-        std::cout << "Weight not on device" << std::endl;
         tie(weight_tensor_on_device, bias_tensor_on_device) = prepare_conv_weights_biases_and_move_to_device(
             weight_tensor,
             bias_tensor,
@@ -140,7 +137,6 @@ Result conv2d(
     }
     // if 1x1 conv w/ stride 1, convert input tensor to tile layout if required
     if (mm_conv) {
-        std::cout << "Run to layout" << std::endl;
         input_tensor_post_tm = ttnn::to_layout(
             input_tensor_post_tm, Layout::TILE, conv_config.dtype, input_tensor_post_tm.memory_config(), device);
     }
@@ -149,7 +145,6 @@ Result conv2d(
     TT_ASSERT(input_is_on_device);
 
     if (!mm_conv) {
-        std::cout << "Not mm conv" << std::endl;
         // call halo op
         SlidingWindowConfig sliding_window_config = SlidingWindowConfig{
             .batch_size = batch_size,
@@ -171,14 +166,11 @@ Result conv2d(
             if (input_tensor_post_tm.layout() == Layout::TILE) {
                 // Reshape is used as a workaround to an issue in to_layout mentioned here :
                 // https://github.com/tenstorrent/tt-metal/issues/16330
-                std::cout << "Run reshape" << std::endl;
                 input_tensor_post_tm = ttnn::reshape(input_tensor_post_tm, input_tensor_post_tm.get_padded_shape());
-                std::cout << "Run to_layout" << std::endl;
                 input_tensor_post_tm =
                     ttnn::to_layout(input_tensor_post_tm, Layout::ROW_MAJOR, std::nullopt, std::nullopt, device);
             }
         } else {
-            std::cout << "Run halo" << std::endl;
             Tensor halo_output = ttnn::halo(
                 DefaultQueueId,
                 input_tensor_post_tm,
@@ -193,16 +185,13 @@ Result conv2d(
             if (conv_config.deallocate_activation) {
                 input_tensor_post_tm.deallocate(/*force*/ true);
             }
-            std::cout << "Run move" << std::endl;
             input_tensor_post_tm = std::move(halo_output);
-            std::cout << "Run move" << std::endl;
             if (conv_config.reallocate_halo_output) {
                 input_tensor_post_tm = ttnn::move(input_tensor_post_tm);
             }
         }
 
         // call conv micro op
-        std::cout << "Call optimized_conv_new" << std::endl;
         auto conv_output = optimized_conv_new(
             input_tensor_post_tm,
             weight_tensor_on_device,
@@ -222,15 +211,12 @@ Result conv2d(
             conv_config.enable_act_double_buffer,
             conv_config.enable_weights_double_buffer,
             conv_config.enable_split_reader);
-        std::cout << "Run to memory config" << std::endl;
         if (memory_config.has_value() && memory_config.value() != conv_output.memory_config()) {
             conv_output = ttnn::to_memory_config(conv_output, memory_config.value(), std::nullopt);
         }
-        std::cout << "Done running c++ conv 1" << std::endl;
         return {conv_output, output_height, output_width, weight_tensor_on_device, bias_tensor_on_device};
     } else {
         // run conv as matmul
-        std::cout << "Running c++ conv 2" << std::endl;
         std::optional<ttnn::operations::matmul::MatmulProgramConfig> program_config = std::nullopt;
         std::optional<MemoryConfig> mm_output_memory_config = std::nullopt;
         if (input_tensor_post_tm.is_sharded()) {
@@ -244,7 +230,6 @@ Result conv2d(
                 num_cores_c);
             mm_output_memory_config = conv_out_memory_config;
         }
-        std::cout << "Running linear" << std::endl;
         Tensor matmul_output = ttnn::linear(
             input_tensor_post_tm,
             weight_tensor_on_device,
@@ -254,12 +239,9 @@ Result conv2d(
             mm_output_memory_config,
             std::nullopt,
             program_config);
-        std::cout << "Done running linear: " << matmul_output.mesh_buffer()->address() << std::endl;
         if (memory_config.has_value() && memory_config.value() != matmul_output.memory_config()) {
             matmul_output = ttnn::to_memory_config(matmul_output, memory_config.value(), std::nullopt);
-            std::cout << "Run to memory config " << matmul_output.mesh_buffer()->address() << std::endl;
         }
-        std::cout << "Done running c++ conv 2" << std::endl;
         return {matmul_output, output_height, output_width, weight_tensor_on_device, bias_tensor_on_device};
     }
 }
