@@ -892,6 +892,7 @@ void detail::Program_::validate_circular_buffer_region(const IDevice* device) {
         }
         uint64_t cb_region_end = cb_allocator.l1_regions.back().second; //cb_allocator.get_cb_region_end();
         if (cb_region_end > max_l1_size) {
+            std::cout << "Exceed max L1 size" << std::endl;
             TT_THROW(
                 "Statically allocated circular buffers on core range {} grow to {} B which is beyond max L1 size of {} "
                 "B",
@@ -900,6 +901,7 @@ void detail::Program_::validate_circular_buffer_region(const IDevice* device) {
                 max_l1_size);
         }
         if (lowest_address.has_value() and lowest_address.value() < cb_region_end) {
+            std::cout << "Overflow into user space" << std::endl;
             TT_THROW(
                 "Statically allocated circular buffers in program {} clash with L1 buffers on core range {}. L1 buffer "
                 "allocated at {} and static circular buffer region ends at {}",

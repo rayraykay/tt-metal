@@ -1785,9 +1785,12 @@ operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_v2_new(
     bool is_block_sharded = a.memory_config().memory_layout == TensorMemoryLayout::BLOCK_SHARDED;
     auto conv_reader_indices_tensor = ttnn::operations::sliding_window::construct_on_host_config_tensor(
         conv_sharded_input_top_left_indices, sliding_window_config, parallel_config);
+
     conv_reader_indices_tensor = ttnn::operations::sliding_window::move_config_tensor_to_device(
         conv_reader_indices_tensor, parallel_config, is_block_sharded, a.device());
-
+    std::cout << "Moving conv2d config buf to device "
+              << std::get<DeviceStorage>(conv_reader_indices_tensor.storage()).get_mesh_buffer()->address()
+              << std::endl;
     if (parallel_config.shard_scheme == TensorMemoryLayout::WIDTH_SHARDED) {
         return multi_core_optimized_conv_width_sharded_v2_impl(
             program,

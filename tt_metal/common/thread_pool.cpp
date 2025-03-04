@@ -49,7 +49,7 @@ public:
         application_thread_id_ = std::this_thread::get_id();
         for (size_t i = 0; i < thread_count; ++i) {
             workers_.emplace_back([this] {
-                std::cout << "Start Thread" << std::endl;
+                // std::cout << "Start Thread" << std::endl;
                 while (true) {
                     std::function<void()> task;  // Task container for this thread
                     {

@@ -417,6 +417,7 @@ Pool2D::MultiCore::cached_program_t Pool2D::MultiCore::create(
     auto reader_indices =
         sliding_window::construct_on_host_config_tensor(top_left_indices, sliding_window_config, parallel_config);
     log_debug(tt::LogOp, "reader_indices shape: {}", reader_indices.logical_shape());
+    std::cout << "Moving conv2d config buf to device" << std::endl;
     auto reader_indices_on_device =
         sliding_window::move_config_tensor_to_device(reader_indices, parallel_config, is_block_sharded, input.device());
 

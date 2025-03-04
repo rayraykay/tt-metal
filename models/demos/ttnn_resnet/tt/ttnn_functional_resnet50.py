@@ -903,7 +903,6 @@ class resnet50:
                 has_bias=True,
                 **conv_kwargs,
             )
-
             self.conv1_bias_tensor = ttnn.prepare_conv_bias(
                 bias_tensor=self.conv1_bias_tensor,
                 input_memory_config=fold_output_tensor.memory_config(),
@@ -912,7 +911,7 @@ class resnet50:
             )
             self.conv1_weight_tensor = ttnn.to_device(self.conv1_weight_tensor, device)
             self.conv1_bias_tensor = ttnn.to_device(self.conv1_bias_tensor, device)
-
+        print("====== Start Conv ========")
         x, [x_height, x_width] = ttnn.conv2d(
             input_tensor=fold_output_tensor,
             weight_tensor=self.conv1_weight_tensor,
@@ -923,7 +922,8 @@ class resnet50:
             return_output_dim=True,
             return_weights_and_bias=False,
         )
-
+        print("====== Done Conv ========")
+        logger.debug(f"==== done first conv")
         # Relu is fused with conv1
         if self.batch_size == 20:
             x = ttnn.reallocate(x)

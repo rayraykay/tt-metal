@@ -104,6 +104,7 @@ public:
     std::pair<bool, bool> replicated_dims() const;
     uint32_t page_size() const { return device_local_config_.page_size; }
     uint32_t num_pages() const { return page_size() == 0 ? 0 : device_local_size_ / page_size(); }
+    bool is_l1() { return is_l1_; }
 
 private:
     // Creates an owning `MeshBuffer`, backed by an allocation made through `backing_buffer`.
@@ -119,7 +120,10 @@ private:
         mesh_device_(mesh_device->shared_from_this()),
         address_(backing_buffer->address()),
         device_local_size_(device_local_size),
-        state_(OwnedBufferState{std::move(backing_buffer)}) {}
+        state_(OwnedBufferState{std::move(backing_buffer)}),
+        is_l1_(
+            device_local_config_.buffer_type == BufferType::L1 or
+            device_local_config_.buffer_type == BufferType::L1_SMALL) {}
 
     // Creates a non-owning `MeshBuffer` as "view" over an existing `address`.
     MeshBuffer(
@@ -134,7 +138,10 @@ private:
         mesh_device_(mesh_device->shared_from_this()),
         address_(address),
         device_local_size_(device_local_size),
-        state_(ExternallyOwnedState{}) {}
+        state_(ExternallyOwnedState{}),
+        is_l1_(
+            device_local_config_.buffer_type == BufferType::L1 or
+            device_local_config_.buffer_type == BufferType::L1_SMALL) {}
 
     void initialize_device_buffers();
     MeshBufferConfig config_;
@@ -156,6 +163,7 @@ private:
     struct DeallocatedState {};
     using MeshBufferState = std::variant<OwnedBufferState, ExternallyOwnedState, DeallocatedState>;
     MeshBufferState state_;
+    bool is_l1_ = false;
 };
 
 }  // namespace tt::tt_metal::distributed

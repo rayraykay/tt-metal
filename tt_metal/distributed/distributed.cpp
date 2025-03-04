@@ -13,6 +13,7 @@ void AddProgramToMeshWorkload(MeshWorkload& mesh_workload, Program&& program, co
 }
 
 void EnqueueMeshWorkload(MeshCommandQueue& mesh_cq, MeshWorkload& mesh_workload, bool blocking) {
+    ZoneScopedN("EnqueueMeshWorkload");
     mesh_workload.compile(mesh_cq.device());
     mesh_workload.load_binaries(mesh_cq);
     mesh_workload.generate_dispatch_commands(mesh_cq);

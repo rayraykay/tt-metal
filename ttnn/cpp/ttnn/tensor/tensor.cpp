@@ -279,7 +279,15 @@ void Tensor::deallocate_impl(bool force, bool deallocation_through_destructor) {
                                 using type = std::decay_t<decltype(s)>;
                                 if constexpr (std::is_same_v<type, DeviceStorage>) {
                                     if (s.mesh_buffer != nullptr and (force or s.mesh_buffer.use_count() == 1)) {
-                                        s.mesh_buffer->deallocate();
+                                        if (not(s.mesh_buffer->address() == 1499104 or
+                                                s.mesh_buffer->address() == 1499072 or
+                                                s.mesh_buffer->address() == 1499040 or
+                                                s.mesh_buffer->address() == 1498688 or
+                                                s.mesh_buffer->address() == 1497344)) {
+                                            std::cout << "Deallocate Mesh Buffer at: " << s.mesh_buffer->address()
+                                                      << std::endl;
+                                            s.mesh_buffer->deallocate();
+                                        }
                                     } else if (force or s.buffer.use_count() == 1) {
                                         DeallocateBuffer(*(s.buffer));
                                     }
@@ -816,17 +824,59 @@ void write_tensor(const Tensor& host_tensor, Tensor device_tensor, QueueId cq_id
             async_safe_tensor.storage_type() == StorageType::MULTI_DEVICE_HOST,
         "write_tensor only supports host_tensor to device_tensor data transfer");
 
+    TT_FATAL(
+        device_tensor.storage_type() == StorageType::DEVICE,
+        "write_tensor only supports host_tensor to device_tensor data transfer");
+    TT_FATAL(async_safe_tensor.get_logical_shape() == device_tensor.get_logical_shape(), "Error");
+    TT_FATAL(async_safe_tensor.get_dtype() == device_tensor.get_dtype(), "Error");
+    TT_FATAL(
+        async_safe_tensor.get_tensor_spec().page_config() == device_tensor.get_tensor_spec().page_config(), "Error");
+
+    auto& device_storage = std::get<DeviceStorage>(device_tensor.get_storage());
+    if (auto mesh_buffer = device_storage.mesh_buffer; mesh_buffer != nullptr) {
+        auto* mesh_device = mesh_buffer->device();
+        std::vector<void*> host_data = std::visit(
+            tt::stl::overloaded{
+                [](BorrowedStorage s) {
+                    return std::visit([](auto&& b) { return std::vector<void*>{b.data()}; }, s.buffer);
+                },
+                [](OwnedStorage s) {
+                    return std::visit(
+                        [](auto&& b) { return std::vector<void*>{static_cast<void*>(b.begin())}; }, s.buffer);
+                },
+                [](const MultiDeviceHostStorage& host_storage) {
+                    std::vector<void*> host_data;
+                    for (int i = 0; i < host_storage.num_buffers(); ++i) {
+                        host_data.push_back(std::visit(
+                            [](auto&& b) { return static_cast<void*>(b.begin()); }, host_storage.get_buffer(i)));
+                    }
+                    return host_data;
+                },
+                [](auto&&) -> std::vector<void*> { TT_THROW("Unreachable"); },
+            },
+            async_safe_tensor.get_storage());
+
+        std::vector<distributed::MeshCommandQueue::ShardDataTransfer> shard_data_transfers;
+        shard_data_transfers.reserve(host_data.size());
+
+        const auto& mesh_shape = mesh_device->shape();
+
+        distributed::MeshCoordinateRange coord_range(mesh_shape);
+        auto shard_coord = coord_range.begin();
+        for (int i = 0; i < host_data.size(); ++shard_coord, i++) {
+            shard_data_transfers.push_back(distributed::MeshCommandQueue::ShardDataTransfer{
+                .shard_coord = *shard_coord,
+                .host_data = host_data[i],
+            });
+        }
+
+        mesh_device->mesh_command_queue().enqueue_write_shards(mesh_buffer, shard_data_transfers, /*blocking=*/false);
+        return;
+    }
+
     for (int worker_index = 0; worker_index < device_tensor.workers.size(); ++worker_index) {
         auto& worker = device_tensor.workers[worker_index];
         worker->push_work([cq_id, worker, worker_index, async_safe_tensor, device_tensor]() mutable {
-            TT_FATAL(
-                device_tensor.storage_type() == StorageType::DEVICE,
-                "write_tensor only supports host_tensor to device_tensor data transfer");
-            TT_FATAL(async_safe_tensor.get_logical_shape() == device_tensor.get_logical_shape(), "Error");
-            TT_FATAL(async_safe_tensor.get_dtype() == device_tensor.get_dtype(), "Error");
-            TT_FATAL(
-                async_safe_tensor.get_tensor_spec().page_config() == device_tensor.get_tensor_spec().page_config(),
-                "Error");
             std::visit(
                 tt::stl::overloaded{
                     [worker, worker_index, cq_id, &async_safe_tensor](const DeviceStorage& device_storage) {

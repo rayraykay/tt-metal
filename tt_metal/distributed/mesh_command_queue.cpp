@@ -70,7 +70,6 @@ MeshCommandQueue::MeshCommandQueue(
                 rc);
         } else {
             std::lock_guard<std::mutex> lock(mutex);
-            std::cout << "Dispatch Thread: " << thread_idx << " bound to: " << cpu_core_for_thread << std::endl;
         }
     });
 
@@ -141,6 +140,7 @@ CoreCoord MeshCommandQueue::virtual_program_dispatch_core() const { return this-
 CoreType MeshCommandQueue::dispatch_core_type() const { return this->dispatch_core_type_; }
 
 void MeshCommandQueue::enqueue_mesh_workload(MeshWorkload& mesh_workload, bool blocking) {
+    ZoneScopedN("MeshCommandQueue::enqueue_mesh_workload");
     std::unordered_set<SubDeviceId> sub_device_ids = mesh_workload.determine_sub_device_ids(mesh_device_);
     TT_FATAL(sub_device_ids.size() == 1, "Programs must be executed on a single sub-device");
     SubDeviceId sub_device_id = *(sub_device_ids.begin());
@@ -149,7 +149,7 @@ void MeshCommandQueue::enqueue_mesh_workload(MeshWorkload& mesh_workload, bool b
     auto dispatch_core_config = DispatchQueryManager::instance().get_dispatch_core_config();
     CoreType dispatch_core_type = dispatch_core_config.get_core_type();
 
-    TT_FATAL(
+    TT_ASSERT(
         mesh_workload.get_program_binary_status(mesh_device_id) != ProgramBinaryStatus::NotSent,
         "Expected program binaries to be written to the MeshDevice.");
 
@@ -185,6 +185,7 @@ void MeshCommandQueue::enqueue_mesh_workload(MeshWorkload& mesh_workload, bool b
     // current device state. Write the finalized program command sequence to each
     // physical device tied to the program.
     for (auto& [device_range, program] : mesh_workload.get_programs()) {
+        ZoneScopedN("MeshWorkload::dispatch_commands");
         auto& program_cmd_seq = mesh_workload.get_dispatch_cmds_for_program(program);
         program_dispatch::update_program_dispatch_commands(
             program,
@@ -206,6 +207,7 @@ void MeshCommandQueue::enqueue_mesh_workload(MeshWorkload& mesh_workload, bool b
                 device_range, program_cmd_seq, dispatch_metadata.stall_first, dispatch_metadata.stall_before_program);
             active_sub_grids.push_back(device_range);
         } else {
+            ZoneScopedN("write_dispatch_commands");
             this->write_program_cmds_to_subgrid(
                 device_range,
                 program_cmd_seq,
@@ -462,8 +464,10 @@ void MeshCommandQueue::enqueue_write_shard_to_sub_grid(
         // Multi-Threaded writes supported for Replicated buffers.
         // Currently not supported when doing TT-Mesh Native sharding, since we
         // rely on TTNN to perform sharding and call enqueue_write_shards
+        ZoneScopedN("MeshCommandQueue::enqueue_replicated_shards");
         auto dispatch_lambda =
             std::function<void(MeshCoordinate)>([this, &buffer, host_data, &region](MeshCoordinate&& coord) {
+                ZoneScopedN("MeshCommandQueue::write_replicated_shards");
                 auto device_shard_view = buffer.get_device_buffer(coord);
                 const BufferRegion buffer_region = region.value_or(BufferRegion(0, device_shard_view->size()));
                 this->write_shard_to_device(device_shard_view, host_data, buffer_region);
@@ -503,8 +507,9 @@ void MeshCommandQueue::enqueue_write_shards(
     bool blocking) {
     // TODO: #17215 - this API is used by TTNN, as it currently implements rich ND sharding API for multi-devices.
     // In the long run, the multi-device sharding API in Metal will change, and this will most likely be replaced.
-
+    ZoneScopedN("MeshCommandQueue::enqueue_write_shards");
     auto dispatch_lambda = std::function<void(uint32_t)>([&shard_data_transfers, &buffer, this](uint32_t shard_idx) {
+        ZoneScopedN("shard_write");
         auto& shard_data_transfer = shard_data_transfers[shard_idx];
         auto device_shard_view = buffer->get_device_buffer(shard_data_transfer.shard_coord);
         this->write_shard_to_device(
@@ -549,8 +554,10 @@ void MeshCommandQueue::enqueue_read_shards(
     bool blocking) {
     // TODO: #17215 - this API is used by TTNN, as it currently implements rich ND sharding API for multi-devices.
     // In the long run, the multi-device sharding API in Metal will change, and this will most likely be replaced.
+    ZoneScopedN("MeshCommandQueue::enqueue_read_shards");
     std::unordered_map<IDevice*, uint32_t> num_txns_per_device = {};
     for (const auto& shard_data_transfer : shard_data_transfers) {
+        ZoneScopedN("read_shard");
         auto device_shard_view = buffer->get_device_buffer(shard_data_transfer.shard_coord);
         this->read_shard_from_device(
             device_shard_view,
@@ -732,6 +739,7 @@ void MeshCommandQueue::write_program_cmds_to_subgrid(
                                                           stall_first,
                                                           stall_before_program,
                                                           this](uint32_t thread_idx) mutable {
+        ZoneScopedN("dispatch_cmd_write");
         uint32_t start_idx = thread_idx * num_chips_per_col;
         auto coord = chip_ids_in_workload.begin();
         std::advance(coord, start_idx);

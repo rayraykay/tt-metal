@@ -216,11 +216,11 @@ operation::ProgramWithCallbacks untilize_with_halo_multi_core_v2(
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_1, .noc = NOC::RISCV_1_default, .compile_args = reader_ct_args});
 
-    if (!capture_buffers) {
-        padding_config_buffer = nullptr;
-        local_config_buffer = nullptr;
-        remote_config_buffer = nullptr;
-    }
+    // if (!capture_buffers) {
+    //     padding_config_buffer = nullptr;
+    //     local_config_buffer = nullptr;
+    //     remote_config_buffer = nullptr;
+    // }
     // Capture padding_config_buffer, local_config_buffer, remote_config_buffer to cache this with the program
     auto override_runtime_arguments_callback = [src_cb,
                                                 out_cb,

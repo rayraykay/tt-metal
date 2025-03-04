@@ -132,7 +132,6 @@ static inline Tensor move_sharded(
         auto& device_storage = std::get<DeviceStorage>(input_tensor.storage());
         from_multi_device = device_storage.mesh_buffer != nullptr;
     }
-    std::cout << "Running move" << std::endl;
     TT_ASSERT(input_tensor.is_allocated(), "Expected input tensor to be allocated");
     auto input_mem_config = input_tensor.memory_config();
     TT_FATAL(input_mem_config.is_sharded(), "Expected input tensor to be sharded");

@@ -27,6 +27,7 @@ void MeshWorkload::compile(MeshDevice* mesh_device) {
     // 1. Compile Kernel Binaries
     // 2. Allocate and Validate CBs
     // 3. Finalize: Compute relative offsets for all data structures in L1
+    ZoneScopedN("MeshWorkloadCompile");
     for (auto& [device_range, program] : programs_) {
         program.compile(mesh_device);
         program.allocate_circular_buffers(mesh_device);
