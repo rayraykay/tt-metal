@@ -249,6 +249,9 @@ public:
         return std::get<DeviceStorage>(this->get_storage()).get_buffer().get();
     }
     std::shared_ptr<Buffer> device_buffer() const { return std::get<DeviceStorage>(this->get_storage()).get_buffer(); }
+    std::shared_ptr<distributed::MeshBuffer> mesh_buffer() const {
+        return std::get<DeviceStorage>(this->get_storage()).get_mesh_buffer_shared();
+    }
 
     distributed::MeshDevice* mesh_device() const {
         if (this->mesh_device_.has_value()) {

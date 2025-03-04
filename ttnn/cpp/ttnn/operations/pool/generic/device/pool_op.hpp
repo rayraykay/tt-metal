@@ -14,6 +14,7 @@
 #include "ttnn/operations/conv/conv2d/conv2d.hpp"
 #include "cpp/ttnn/operations/sliding_window/sliding_window.hpp"
 #include "ttnn/decorators.hpp"
+#include <tt-metalium/distributed.hpp>
 
 namespace ttnn::operations {
 namespace pool {
@@ -46,7 +47,7 @@ struct Pool2D {
             CBHandle cb_out;
             uint32_t ncores;
             uint32_t ncores_w;
-            std::shared_ptr<Buffer> reader_indices_buffer;
+            std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> reader_indices_buffer;
         };
 
         using cached_program_t = ttnn::device_operation::CachedProgram<shared_variables_t>;

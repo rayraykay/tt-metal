@@ -59,6 +59,10 @@ struct DeviceStorage {
         TT_FATAL(mesh_buffer != nullptr, "Mesh buffer is not allocated");
         return mesh_buffer.get();
     }
+    std::shared_ptr<distributed::MeshBuffer> get_mesh_buffer_shared() const {
+        TT_FATAL(mesh_buffer != nullptr, "Mesh buffer is not allocated");
+        return mesh_buffer;
+    }
     IDevice* get_device() const {
         if (mesh_buffer != nullptr) {
             return mesh_buffer->device();

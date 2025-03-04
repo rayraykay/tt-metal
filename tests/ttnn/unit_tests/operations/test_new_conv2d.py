@@ -465,33 +465,33 @@ def test_conv_features_multi_device(
 ):
     if output_layout == ttnn.ROW_MAJOR_LAYOUT and activations_dtype == ttnn.bfloat8_b:
         pytest.skip("Row major layout not compatible with bfloat8_b")
-
-    run_conv(
-        mesh_device,
-        torch_tensor_map,
-        math_fidelity,
-        activations_dtype,
-        weights_dtype,
-        batch_size,
-        output_channels,
-        input_channels,
-        input_height,
-        input_width,
-        filter,
-        filter,
-        stride,
-        stride,
-        pad,
-        pad,
-        config,
-        shard_layout=shard_layout,
-        output_layout=output_layout,
-        has_bias=True,
-        input_mesh_mapper=ttnn.ShardTensorToMesh(mesh_device, dim=0),
-        weight_mesh_mapper=ttnn.ReplicateTensorToMesh(mesh_device),
-        output_mesh_composer=ttnn.ConcatMeshToTensor(mesh_device, dim=0),
-        groups=groups,
-    )
+    for i in range(2):
+        run_conv(
+            mesh_device,
+            torch_tensor_map,
+            math_fidelity,
+            activations_dtype,
+            weights_dtype,
+            batch_size,
+            output_channels,
+            input_channels,
+            input_height,
+            input_width,
+            filter,
+            filter,
+            stride,
+            stride,
+            pad,
+            pad,
+            config,
+            shard_layout=shard_layout,
+            output_layout=output_layout,
+            has_bias=True,
+            input_mesh_mapper=ttnn.ShardTensorToMesh(mesh_device, dim=0),
+            weight_mesh_mapper=ttnn.ReplicateTensorToMesh(mesh_device),
+            output_mesh_composer=ttnn.ConcatMeshToTensor(mesh_device, dim=0),
+            groups=groups,
+        )
 
 
 @skip_for_grayskull()

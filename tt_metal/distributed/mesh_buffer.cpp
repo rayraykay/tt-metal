@@ -101,9 +101,9 @@ std::shared_ptr<MeshBuffer> MeshBuffer::create(
 
         mesh_buffer = std::shared_ptr<MeshBuffer>(new MeshBuffer(
             mesh_buffer_config, device_local_config, device_local_size, mesh_device, std::move(backing_buffer)));
-        if (mesh_buffer->is_l1()) {
-            std::cout << "Allocate Mesh Buffer at: " << mesh_buffer->address() << std::endl;
-        }
+        // if (mesh_buffer->is_l1()) {
+        //     std::cout << "Allocate Mesh Buffer at: " << mesh_buffer->address() << std::endl;
+        // }
     } else {
         mesh_buffer = std::shared_ptr<MeshBuffer>(
             new MeshBuffer(mesh_buffer_config, device_local_config, address.value(), device_local_size, mesh_device));

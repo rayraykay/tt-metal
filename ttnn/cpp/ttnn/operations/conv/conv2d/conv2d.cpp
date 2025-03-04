@@ -230,6 +230,7 @@ Result conv2d(
         return {conv_output, output_height, output_width, weight_tensor_on_device, bias_tensor_on_device};
     } else {
         // run conv as matmul
+        std::cout << "Running c++ conv 2" << std::endl;
         std::optional<ttnn::operations::matmul::MatmulProgramConfig> program_config = std::nullopt;
         std::optional<MemoryConfig> mm_output_memory_config = std::nullopt;
         if (input_tensor_post_tm.is_sharded()) {
@@ -243,6 +244,7 @@ Result conv2d(
                 num_cores_c);
             mm_output_memory_config = conv_out_memory_config;
         }
+        std::cout << "Running linear" << std::endl;
         Tensor matmul_output = ttnn::linear(
             input_tensor_post_tm,
             weight_tensor_on_device,
@@ -252,9 +254,10 @@ Result conv2d(
             mm_output_memory_config,
             std::nullopt,
             program_config);
-
+        std::cout << "Done running linear: " << matmul_output.mesh_buffer()->address() << std::endl;
         if (memory_config.has_value() && memory_config.value() != matmul_output.memory_config()) {
             matmul_output = ttnn::to_memory_config(matmul_output, memory_config.value(), std::nullopt);
+            std::cout << "Run to memory config " << matmul_output.mesh_buffer()->address() << std::endl;
         }
         std::cout << "Done running c++ conv 2" << std::endl;
         return {matmul_output, output_height, output_width, weight_tensor_on_device, bias_tensor_on_device};

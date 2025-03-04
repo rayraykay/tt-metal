@@ -1666,6 +1666,7 @@ operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_v2_impl(
     auto mcast_sender_cores_vec = grid_to_cores(mcast_sender_cores.start_coord, mcast_sender_cores.end_coord, true);
     auto mcast_receiver_cores_vec = corerange_to_cores(mcast_receiver_cores, std::nullopt, true);
     // Capture conv_reader_indices_buffer to cache this with the program
+    auto conv_reader_indices_mesh_buffer = conv_reader_indices.value().mesh_buffer();
     auto override_runtime_arguments_callback =
         [reader_kernel_id = reader_id,
          mcast_sender_cores = mcast_sender_cores_vec,
@@ -1678,7 +1679,7 @@ operation::ProgramWithCallbacks multi_core_optimized_conv_sharded_v2_impl(
          num_cores_x = num_cores_x,
          num_cores_y = num_cores_y,
          has_bias = has_bias,
-         conv_reader_indices_buffer = conv_reader_indices_buffer](
+         conv_reader_indices_buffer = conv_reader_indices_mesh_buffer](
             const void* operation,
             Program& program,
             const std::vector<Tensor>& input_tensors,

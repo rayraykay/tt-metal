@@ -144,6 +144,11 @@ operation::ProgramWithCallbacks untilize_with_halo_multi_core_v2(
     TT_ASSERT(local_config.get_dtype() == DataType::UINT16);
     TT_ASSERT(remote_config.get_dtype() == DataType::UINT16);
 
+    auto padding_config_mesh_buffer = padding_config.mesh_buffer();
+    auto local_config_mesh_buffer = local_config.mesh_buffer();
+    auto remote_config_mesh_buffer = remote_config.mesh_buffer();
+    ;
+
     auto padding_config_buffer = padding_config.device_buffer();
     const uint32_t num_cores = all_cores.num_cores();
     auto padding_config_cb_config =
@@ -227,9 +232,9 @@ operation::ProgramWithCallbacks untilize_with_halo_multi_core_v2(
                                                 padding_config_cb,
                                                 local_config_cb,
                                                 remote_config_cb,
-                                                padding_config_buffer,
-                                                local_config_buffer,
-                                                remote_config_buffer](
+                                                padding_config_mesh_buffer,
+                                                local_config_mesh_buffer,
+                                                remote_config_mesh_buffer](
                                                    const void* operation,
                                                    Program& program,
                                                    const std::vector<Tensor>& input_tensors,

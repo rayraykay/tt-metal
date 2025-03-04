@@ -732,7 +732,7 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_width_sh
         act_tile_size);
 
     auto conv_reader_indices_buffer = conv_reader_indices.value().device_buffer();
-
+    auto conv_reader_indices_mesh_buffer = conv_reader_indices.value().mesh_buffer();
     CircularBufferConfig cb_for_reader_indices_config =
         CircularBufferConfig(out_block_h_datums * 2, {{cb_for_reader_indices, tt::DataFormat::Float16_b}})
             .set_page_size(cb_for_reader_indices, out_block_h_datums * 2);
@@ -869,7 +869,7 @@ tt::tt_metal::operation::ProgramWithCallbacks multi_core_optimized_conv_width_sh
     }
 
     // Capture conv_reader_indices_buffer to cache this with the program
-    auto empty_callback = [conv_reader_indices_buffer](
+    auto empty_callback = [conv_reader_indices_mesh_buffer](
                               const void* operation,
                               Program& program,
                               const std::vector<Tensor>& input_tensors,

@@ -31,17 +31,18 @@ bool can_deallocate(const Tensor& input_tensor) {
 }
 
 static inline Tensor move(QueueId queue_id, const Tensor& input_tensor, const std::optional<MemoryConfig>& mem_config) {
+    std::cout << "Calling move" << std::endl;
     TT_ASSERT(input_tensor.is_allocated(), "Expected input tensor to be allocated");
     auto input_mem_config = input_tensor.memory_config();
     auto input_address = input_tensor.buffer()->address();
     auto output_mem_config = mem_config.value_or(input_mem_config);
-
+    std::cout << "Check if can deallocate" << std::endl;
     if (not can_deallocate(input_tensor)) {
         // TODO: Should this throw error?
         return input_tensor;
     }
-
-    DeallocateBuffer(*input_tensor.buffer());
+    std::cout << "Deallocate tensor at: " << input_tensor.mesh_buffer()->address() << std::endl;
+    input_tensor.mesh_buffer()->deallocate();
     auto output_tensor = create_device_tensor(
         TensorSpec(
             input_tensor.get_logical_shape(),
@@ -52,7 +53,7 @@ static inline Tensor move(QueueId queue_id, const Tensor& input_tensor, const st
                 input_tensor.get_logical_shape(),
                 input_tensor.get_padded_shape())),
         input_tensor.device());
-
+    std::cout << "Tensor moved to: " << output_tensor.mesh_buffer()->address() << std::endl;
     // get_parallelization_strategy
     bool move_within_same_mem_space = input_mem_config.buffer_type == output_mem_config.buffer_type;
 
@@ -122,6 +123,7 @@ static inline Tensor move(QueueId queue_id, const Tensor& input_tensor, const st
 static inline Tensor move_sharded(
     QueueId queue_id, const Tensor& input_tensor, const std::optional<MemoryConfig>& mem_config) {
     std::vector<Tensor> output_tensors = {Tensor(operation::get_workers_for_op_output({input_tensor}))};
+    std::cout << "calling move sharded" << std::endl;
     operation::launch_op(
         [mem_config](
             const std::vector<Tensor>& input_tensors,
@@ -148,7 +150,7 @@ static inline Tensor move_sharded(
             auto input_dtype = input_tensor.get_dtype();
             auto input_layout = input_tensor.get_layout();
 
-            DeallocateBuffer(*input_tensor.buffer());
+            input_tensor.mesh_buffer()->deallocate();
             // log_debug(LogOp, "OUTPUT SHARD SPEC: {}", out_shard_spec);
             auto shard_mem_config = output_mem_config;
             shard_mem_config.shard_spec = shard_spec;

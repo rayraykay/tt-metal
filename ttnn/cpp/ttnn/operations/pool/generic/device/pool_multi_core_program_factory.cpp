@@ -41,6 +41,7 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
     IDevice* device = input.device();
     tt::tt_metal::Buffer* src_dram_buffer = input.buffer();
     auto reader_indices_buffer = reader_indices.device_buffer();
+    auto reader_indices_mesh_buffer = reader_indices.mesh_buffer();
     tt::tt_metal::Buffer* dst_dram_buffer = output.buffer();
 
     const auto input_shape = input.get_padded_shape();
@@ -385,7 +386,7 @@ Pool2D::MultiCore::cached_program_t pool2d_multi_core_sharded_with_halo_v2_impl_
          .cb_out = cb_out,
          .ncores = ncores,
          .ncores_w = ncores_w,
-         .reader_indices_buffer = reader_indices_buffer}};
+         .reader_indices_buffer = reader_indices_mesh_buffer}};
 }
 
 Pool2D::MultiCore::cached_program_t Pool2D::MultiCore::create(
@@ -417,9 +418,10 @@ Pool2D::MultiCore::cached_program_t Pool2D::MultiCore::create(
     auto reader_indices =
         sliding_window::construct_on_host_config_tensor(top_left_indices, sliding_window_config, parallel_config);
     log_debug(tt::LogOp, "reader_indices shape: {}", reader_indices.logical_shape());
-    std::cout << "Moving conv2d config buf to device" << std::endl;
     auto reader_indices_on_device =
         sliding_window::move_config_tensor_to_device(reader_indices, parallel_config, is_block_sharded, input.device());
+    std::cout << "Moving pool config buf to device"
+              << std::get<DeviceStorage>(reader_indices_on_device.storage()).get_mesh_buffer()->address() << std::endl;
 
     auto in_n = sliding_window_config.batch_size;
     auto in_h = sliding_window_config.input_hw.first;

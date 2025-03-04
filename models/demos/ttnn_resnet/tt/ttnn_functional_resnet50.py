@@ -243,7 +243,9 @@ class resnet50Bottleneck:
                 return_weights_and_bias=False,
             )
             ttnn.deallocate(x)
+            print("call reallocate")
             ds_out = ttnn.reallocate(ds_out)
+            print("Done call reallocate")
         else:
             ds_out = x
         return ds_out
