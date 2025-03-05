@@ -87,12 +87,13 @@ const core_descriptor_t& get_core_descriptor_config(
     ARCH arch = tt::tt_metal::MetalContext::instance().get_cluster().arch();
     uint32_t harvesting_mask = tt::tt_metal::MetalContext::instance().get_cluster().get_harvesting_mask(device_id);
     std::bitset<32> mask_bitset(harvesting_mask);
-    uint32_t num_harvested_rows = mask_bitset.count();
+    uint32_t num_harvested_on_axis = mask_bitset.count();
 
-    if (num_harvested_rows > 2) {
-        TT_THROW("At most two rows can be harvested, but detected {} harvested rows", num_harvested_rows);
+    if (num_harvested_on_axis > 2) {
+        TT_THROW(
+            "At most two rows or cols can be harvested, but detected {} along harvested axis", num_harvested_on_axis);
     }
-    if (num_harvested_rows == 1 and arch == tt::ARCH::GRAYSKULL) {
+    if (num_harvested_on_axis == 1 and arch == tt::ARCH::GRAYSKULL) {
         TT_THROW("One row harvested Grayskull is not supported");
     }
 
