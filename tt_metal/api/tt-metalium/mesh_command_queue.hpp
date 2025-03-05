@@ -21,6 +21,7 @@
 namespace tt::tt_metal {
 
 class ThreadPool;
+class AsyncDispatcher;
 
 namespace distributed {
 
@@ -123,9 +124,9 @@ private:
     CoreCoord dispatch_core_;
     CoreType dispatch_core_type_ = CoreType::WORKER;
     // MeshCommandQueues and the MeshDevice share thread-pools for dispatching to and reading from the Mesh
-    std::shared_ptr<ThreadPool>
+    std::shared_ptr<AsyncDispatcher>
         dispatch_thread_pool_;  // Thread pool used to dispatch to the Mesh (used by main thread)
-    std::shared_ptr<ThreadPool>
+    std::shared_ptr<AsyncDispatcher>
         reader_thread_pool_;  // Thread pool used to read from the Mesh (used by the Completion Queue Reader thread)
 
     // Member Vars used to control the execution of the Completion Queue Reader thread
@@ -156,8 +157,8 @@ public:
     MeshCommandQueue(
         MeshDevice* mesh_device,
         uint32_t id,
-        std::shared_ptr<ThreadPool>& dispatch_thread_pool,
-        std::shared_ptr<ThreadPool>& reader_thread_pool);
+        std::shared_ptr<AsyncDispatcher>& dispatch_thread_pool,
+        std::shared_ptr<AsyncDispatcher>& reader_thread_pool);
 
     MeshCommandQueue(const MeshCommandQueue& other) = delete;
     MeshCommandQueue& operator=(const MeshCommandQueue& other) = delete;

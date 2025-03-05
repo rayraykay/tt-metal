@@ -21,7 +21,7 @@
 #include <sub_device_manager_tracker.hpp>
 #include <sub_device_manager.hpp>
 #include <sub_device_types.hpp>
-#include "tt_metal/common/thread_pool.hpp"
+#include <tt-metalium/thread_pool.hpp>
 
 #include <hal.hpp>
 #include <mesh_coord.hpp>
@@ -122,8 +122,8 @@ MeshDevice::MeshDevice(
     view_(std::move(mesh_device_view)),
     mesh_id_(generate_unique_mesh_id()),
     parent_mesh_(std::move(parent_mesh)),
-    dispatch_thread_pool_(create_custom_thread_pool(view_->shape().mesh_size())),
-    reader_thread_pool_(create_custom_thread_pool(view_->shape().mesh_size())) {}
+    dispatch_thread_pool_(std::make_shared<AsyncDispatcher>(view_->shape().mesh_size(), 0)),
+    reader_thread_pool_(std::make_shared<AsyncDispatcher>(view_->shape().mesh_size(), 8)) {}
 
 std::shared_ptr<MeshDevice> MeshDevice::create(
     const MeshDeviceConfig& config,

@@ -15,7 +15,7 @@
 #include "tt_metal/impl/program/dispatch.hpp"
 #include "tt_metal/impl/trace/dispatch.hpp"
 #include "tt_metal/impl/dispatch/dispatch_query_manager.hpp"
-#include "tt_metal/common/thread_pool.hpp"
+#include <tt-metalium/thread_pool.hpp>
 #include "tt_cluster.hpp"
 #include <thread>
 #include <numa.h>
@@ -31,20 +31,11 @@ struct MeshBufferReadDescriptor {
     std::unordered_map<IDevice*, uint32_t> read_metadata;
 };
 
-std::unordered_map<int, std::vector<uint32_t>> get_cpu_cores_per_numa_node() {
-    std::unordered_map<int, std::vector<uint32_t>> cpu_cores_per_numa_node = {};
-    for (int cpu = 0; cpu < numa_num_configured_cpus(); ++cpu) {
-        int node = numa_node_of_cpu(cpu);
-        cpu_cores_per_numa_node[node].push_back(cpu);
-    }
-    return cpu_cores_per_numa_node;
-}
-
 MeshCommandQueue::MeshCommandQueue(
     MeshDevice* mesh_device,
     uint32_t id,
-    std::shared_ptr<ThreadPool>& dispatch_thread_pool,
-    std::shared_ptr<ThreadPool>& reader_thread_pool) :
+    std::shared_ptr<AsyncDispatcher>& dispatch_thread_pool,
+    std::shared_ptr<AsyncDispatcher>& reader_thread_pool) :
     dispatch_thread_pool_(dispatch_thread_pool), reader_thread_pool_(reader_thread_pool) {
     mesh_device_ = mesh_device;
     id_ = id;
@@ -52,36 +43,7 @@ MeshCommandQueue::MeshCommandQueue(
         config_buffer_mgr_, expected_num_workers_completed_, DispatchSettings::DISPATCH_MESSAGE_ENTRIES);
     this->populate_virtual_program_dispatch_core();
     this->populate_dispatch_core_type();
-    auto cpu_cores_per_numa_node = get_cpu_cores_per_numa_node();
-    std::mutex mutex;
-    auto affinity_lambda = std::function<void(uint32_t)>([&mutex, &cpu_cores_per_numa_node](uint32_t thread_idx) {
-        uint32_t numa_node_for_thread = thread_idx % cpu_cores_per_numa_node.size();
-        auto& candidate_cores_for_thread = cpu_cores_per_numa_node[numa_node_for_thread];
-        uint32_t cpu_core_for_thread = candidate_cores_for_thread[thread_idx % candidate_cores_for_thread.size()];
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(cpu_core_for_thread, &cpuset);
-        pthread_t current_thread = pthread_self();
-        int rc = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-        if (rc) {
-            log_warning(
-                tt::LogMetal,
-                "Unable to bind main thread to free CPU cores. May see performance degradation. Error Code: {}",
-                rc);
-        } else {
-            std::lock_guard<std::mutex> lock(mutex);
-        }
-    });
 
-    for (int i = 0; i < 8; i++) {
-        dispatch_thread_pool_->enqueue([&affinity_lambda, i]() { affinity_lambda(i); });
-    }
-    dispatch_thread_pool_->wait();
-
-    for (int i = 0; i < 8; i++) {
-        reader_thread_pool->enqueue([&affinity_lambda, i]() { affinity_lambda(i + 8); });
-    }
-    reader_thread_pool->wait();
     std::thread completion_queue_thread = std::thread(&MeshCommandQueue::read_completion_queue, this);
     completion_queue_reader_thread_ = std::move(completion_queue_thread);
 }
@@ -472,9 +434,10 @@ void MeshCommandQueue::enqueue_write_shard_to_sub_grid(
                 const BufferRegion buffer_region = region.value_or(BufferRegion(0, device_shard_view->size()));
                 this->write_shard_to_device(device_shard_view, host_data, buffer_region);
             });
-
+        uint32_t idx = 0;
         for (const auto& coord : device_range) {
-            dispatch_thread_pool_->enqueue([&dispatch_lambda, coord]() { dispatch_lambda(std::move(coord)); });
+            dispatch_thread_pool_->enqueue([&dispatch_lambda, coord]() { dispatch_lambda(std::move(coord)); }, idx);
+            idx++;
         }
         dispatch_thread_pool_->wait();
     } else {
@@ -519,7 +482,9 @@ void MeshCommandQueue::enqueue_write_shards(
     });
 
     for (std::size_t shard_idx = 0; shard_idx < shard_data_transfers.size(); shard_idx++) {
-        dispatch_thread_pool_->enqueue([&dispatch_lambda, shard_idx]() { dispatch_lambda(shard_idx); });
+        dispatch_thread_pool_->enqueue(
+            [&dispatch_lambda, shard_idx]() { dispatch_lambda(shard_idx); },
+            mesh_device_->get_device(shard_data_transfers[shard_idx].shard_coord)->id());
     }
     dispatch_thread_pool_->wait();
 
@@ -538,13 +503,17 @@ void MeshCommandQueue::increment_num_entries_in_completion_queue() {
 
 void MeshCommandQueue::submit_memcpy_request(
     std::unordered_map<IDevice*, uint32_t>& num_txns_per_device, bool blocking) {
-    completion_queue_reads_.push(std::make_shared<MeshCompletionReaderVariant>(
-        std::in_place_type<MeshBufferReadDescriptor>, std::move(num_txns_per_device)));
-
+    {
+        ZoneScopedN("PushToQueue");
+        completion_queue_reads_.push(std::make_shared<MeshCompletionReaderVariant>(
+            std::in_place_type<MeshBufferReadDescriptor>, std::move(num_txns_per_device)));
+    }
     this->increment_num_entries_in_completion_queue();
-
-    if (blocking) {
-        this->finish();
+    {
+        ZoneScopedN("Finish");
+        if (blocking) {
+            this->finish();
+        }
     }
 }
 
@@ -565,13 +534,27 @@ void MeshCommandQueue::enqueue_read_shards(
             shard_data_transfer.region.value_or(BufferRegion(0, device_shard_view->size())),
             num_txns_per_device);
     }
-    this->submit_memcpy_request(num_txns_per_device, blocking);
+    {
+        ZoneScopedN("SubmitRequest");
+        this->submit_memcpy_request(num_txns_per_device, blocking);
+    }
 }
 
 MeshEvent MeshCommandQueue::enqueue_record_event_helper(
     tt::stl::Span<const SubDeviceId> sub_device_ids,
     bool notify_host,
     const std::optional<MeshCoordinateRange>& device_range) {
+    std::vector<MeshCoordinate> coords = {
+        MeshCoordinate{0, 0},
+        MeshCoordinate{0, 1},
+        MeshCoordinate{0, 2},
+        MeshCoordinate{0, 3},
+        MeshCoordinate{0, 4},
+        MeshCoordinate{0, 5},
+        MeshCoordinate{0, 6},
+        MeshCoordinate{0, 7}};
+
+    ZoneScopedN("RecordEvent");
     auto& sysmem_manager = this->reference_sysmem_manager();
     auto event = MeshEvent(
         sysmem_manager.get_next_event(id_),
@@ -580,18 +563,35 @@ MeshEvent MeshCommandQueue::enqueue_record_event_helper(
         device_range.value_or(MeshCoordinateRange(mesh_device_->shape())));
 
     sub_device_ids = buffer_dispatch::select_sub_device_ids(mesh_device_, sub_device_ids);
-    for (const auto& coord : event.device_range()) {
-        event_dispatch::issue_record_event_commands(
-            mesh_device_,
-            event.id(),
-            id_,
-            mesh_device_->num_hw_cqs(),
-            mesh_device_->get_device(coord)->sysmem_manager(),
-            sub_device_ids,
-            expected_num_workers_completed_,
-            notify_host);
+
+    uint32_t num_cols = 4;
+    uint32_t num_chips_per_col = coords.size() / num_cols;
+    auto dispatch_lambda = std::function<void(uint32_t)>(
+        [this, &event, &sub_device_ids, &coords, notify_host, num_chips_per_col](uint32_t thread_idx) {
+            ZoneScopedN("dispatch_cmd_write");
+            uint32_t start_idx = thread_idx * num_chips_per_col;
+            for (uint32_t i = start_idx; i < start_idx + num_chips_per_col; i++) {
+                event_dispatch::issue_record_event_commands(
+                    mesh_device_,
+                    event.id(),
+                    id_,
+                    mesh_device_->num_hw_cqs(),
+                    mesh_device_->get_device(coords[i])->sysmem_manager(),
+                    sub_device_ids,
+                    expected_num_workers_completed_,
+                    notify_host);
+            }
+        });
+
+    {
+        ZoneScopedN("IssueCmds");
+        for (uint32_t thread_idx = 0; thread_idx < num_cols; thread_idx++) {
+            dispatch_thread_pool_->enqueue(
+                [&dispatch_lambda, thread_idx]() mutable { dispatch_lambda(thread_idx); }, thread_idx);
+        }
     }
 
+    dispatch_thread_pool_->wait();
     return event;
 }
 
@@ -610,6 +610,7 @@ MeshEvent MeshCommandQueue::enqueue_record_event_to_host(
 }
 
 void MeshCommandQueue::enqueue_wait_for_event(const MeshEvent& sync_event) {
+    ZoneScopedN("WaitForEvent");
     for (const auto& coord : sync_event.device_range()) {
         event_dispatch::issue_wait_for_event_commands(
             id_, sync_event.mesh_cq_id(), mesh_device_->get_device(coord)->sysmem_manager(), sync_event.id());
@@ -618,9 +619,10 @@ void MeshCommandQueue::enqueue_wait_for_event(const MeshEvent& sync_event) {
 
 void MeshCommandQueue::read_completion_queue() {
     while (true) {
-        std::unique_lock<std::mutex> lock(reader_thread_cv_mutex_);
-        reader_thread_cv_.wait(lock, [this] { return num_outstanding_reads_ or exit_condition_; });
-
+        {
+            std::unique_lock<std::mutex> lock(reader_thread_cv_mutex_);
+            reader_thread_cv_.wait(lock, [this] { return num_outstanding_reads_ or exit_condition_; });
+        }
         if (exit_condition_) {
             return;
         } else {
@@ -659,7 +661,7 @@ void MeshCommandQueue::copy_buffer_data_to_user_space(MeshBufferReadDescriptor& 
         auto& read_descriptor_queue = this->get_read_descriptor_queue(device);
         chip_id_t mmio_device_id = tt::Cluster::instance().get_associated_mmio_device(device->id());
         uint16_t channel = tt::Cluster::instance().get_assigned_channel_for_device(device->id());
-
+        ZoneScopedN("ReadBuffer");
         for (int i = 0; i < num_reads; i++) {
             buffer_dispatch::copy_completion_queue_data_into_user_space(
                 std::get<ReadBufferDescriptor>(*(read_descriptor_queue.pop())),
@@ -674,9 +676,11 @@ void MeshCommandQueue::copy_buffer_data_to_user_space(MeshBufferReadDescriptor& 
     {
         std::lock_guard<std::mutex> lock(reader_thread_pool_mutex_);
         for (auto& metadata : read_buffer_descriptor.read_metadata) {
-            reader_thread_pool_->enqueue([&reader_lambda, device = metadata.first, num_reads = metadata.second]() {
-                reader_lambda(device, num_reads);
-            });
+            reader_thread_pool_->enqueue(
+                [&reader_lambda, device = metadata.first, num_reads = metadata.second]() {
+                    reader_lambda(device, num_reads);
+                },
+                metadata.first->id());
         }
         reader_thread_pool_->wait();
     }
@@ -725,11 +729,12 @@ void MeshCommandQueue::write_program_cmds_to_subgrid(
     std::unordered_set<uint32_t>& chip_ids_in_workload) {
     auto dispatch_core_config = DispatchQueryManager::instance().get_dispatch_core_config();
     auto dispatch_core_type = dispatch_core_config.get_core_type();
-
-    for (auto& coord : sub_grid) {
-        chip_ids_in_workload.insert(this->mesh_device_->get_device(coord)->id());
+    {
+        ZoneScopedN("InsertChips");
+        for (auto& coord : sub_grid) {
+            chip_ids_in_workload.insert(this->mesh_device_->get_device(coord)->id());
+        }
     }
-
     uint32_t num_cols = 2;  // sub_grid.end_coord().coords()[1] - sub_grid.start_coord().coords()[1] + 1;
     uint32_t num_chips_per_col = chip_ids_in_workload.size() / num_cols;
     auto dispatch_lambda = std::function<void(uint32_t)>([&chip_ids_in_workload,
@@ -756,10 +761,15 @@ void MeshCommandQueue::write_program_cmds_to_subgrid(
     });
 
     for (uint32_t thread_idx = 0; thread_idx < num_cols; thread_idx++) {
-        dispatch_thread_pool_->enqueue([&dispatch_lambda, thread_idx]() mutable { dispatch_lambda(thread_idx); });
+        dispatch_thread_pool_->enqueue(
+            [&dispatch_lambda, thread_idx]() mutable { dispatch_lambda(thread_idx); }, thread_idx);
     }
+
     // Barrier
-    dispatch_thread_pool_->wait();
+    {
+        ZoneScopedN("Barrier");
+        dispatch_thread_pool_->wait();
+    }
 }
 
 void MeshCommandQueue::write_go_signal_to_unused_sub_grids(
@@ -836,6 +846,7 @@ void MeshCommandQueue::capture_go_signal_trace_on_unused_subgrids(
 }
 
 void MeshCommandQueue::enqueue_trace(const MeshTraceId& trace_id, bool blocking) {
+    ZoneScopedN("EnqueueMeshTrace");
     auto trace_inst = mesh_device_->get_mesh_trace(trace_id);
     auto descriptor = trace_inst->desc;
     auto buffer = trace_inst->mesh_buffer;
@@ -851,15 +862,26 @@ void MeshCommandQueue::enqueue_trace(const MeshTraceId& trace_id, bool blocking)
         buffer->num_pages(),
         buffer->address());
 
-    for (auto device : mesh_device_->get_devices()) {
-        trace_dispatch::issue_trace_commands(
-            mesh_device_, device->sysmem_manager(), dispatch_md, id_, expected_num_workers_completed_, dispatch_core_);
+    {
+        ZoneScopedN("IssueCmds");
+        for (auto device : mesh_device_->get_devices()) {
+            trace_dispatch::issue_trace_commands(
+                mesh_device_,
+                device->sysmem_manager(),
+                dispatch_md,
+                id_,
+                expected_num_workers_completed_,
+                dispatch_core_);
+        }
     }
-    trace_dispatch::update_worker_state_post_trace_execution(
-        trace_inst->desc->descriptors,
-        this->reference_sysmem_manager(),
-        config_buffer_mgr_,
-        expected_num_workers_completed_);
+    {
+        ZoneScopedN("UpdateState");
+        trace_dispatch::update_worker_state_post_trace_execution(
+            trace_inst->desc->descriptors,
+            this->reference_sysmem_manager(),
+            config_buffer_mgr_,
+            expected_num_workers_completed_);
+    }
 
     if (blocking) {
         this->finish();

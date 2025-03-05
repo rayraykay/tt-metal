@@ -16,6 +16,7 @@
 #include "ttnn/tensor/types.hpp"
 #include "ttnn/operations/core/core.hpp"
 #include "ttnn/distributed/api.hpp"
+#include <tt-metalium/thread_pool.hpp>
 
 using namespace tt::tt_metal;
 
@@ -590,7 +591,7 @@ Tensor to_host_mesh_tensor(const Tensor& tensor, bool blocking) {
         ++shard_coord;
     }
 
-    mesh_cq.enqueue_read_shards(shard_data_transfers, mesh_buffer, /*blocking=*/true);
+    mesh_cq.enqueue_read_shards(shard_data_transfers, mesh_buffer, blocking);
 
     MultiDeviceHostStorage host_storage(AllGatherTensor{}, std::move(buffers), std::move(specs));
     return Tensor(std::move(host_storage), tensor.get_tensor_spec());

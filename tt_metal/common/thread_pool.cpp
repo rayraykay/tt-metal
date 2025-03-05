@@ -5,10 +5,12 @@
 #include <boost/asio.hpp>
 #include <future>
 #include <iostream>
-#include <semaphore>
 
-#include "tt_metal/common/thread_pool.hpp"
+#include <tt-metalium/thread_pool.hpp>
 #include <tt-metalium/assert.hpp>
+#include "tt_metal/llrt/tt_cluster.hpp"
+#include <numa.h>
+
 namespace tt::tt_metal {
 
 namespace detail {
@@ -49,7 +51,6 @@ public:
         application_thread_id_ = std::this_thread::get_id();
         for (size_t i = 0; i < thread_count; ++i) {
             workers_.emplace_back([this] {
-                // std::cout << "Start Thread" << std::endl;
                 while (true) {
                     std::function<void()> task;  // Task container for this thread
                     {
@@ -189,4 +190,95 @@ std::shared_ptr<ThreadPool> create_boost_thread_pool(int num_threads) {
 std::shared_ptr<ThreadPool> create_custom_thread_pool(int num_threads) {
     return std::make_shared<detail::CThreadPool>(num_threads);
 }
+
+std::unordered_map<int, std::vector<uint32_t>> get_cpu_cores_per_numa_node() {
+    std::unordered_map<int, std::vector<uint32_t>> cpu_cores_per_numa_node = {};
+    for (int cpu = 0; cpu < numa_num_configured_cpus(); ++cpu) {
+        int node = numa_node_of_cpu(cpu);
+        cpu_cores_per_numa_node[node].push_back(cpu);
+    }
+    return cpu_cores_per_numa_node;
+}
+
+Executor::Executor(uint32_t instance, uint32_t offset) : tasks_() {
+    static std::unordered_map<int, std::vector<uint32_t>> cpu_cores_per_numa_node = get_cpu_cores_per_numa_node();
+
+    worker = std::thread([this]() {
+        while (true) {
+            std::function<void()> task;  // Task container for this thread
+            {
+                task_semaphore_.acquire();  // Ensures 1:1 task to worker mapping
+                if (shutdown_) {
+                    return;
+                }
+                task = std::move(tasks_.pop());  // Move the function out of the queue
+            }
+            task();  // Execute the function
+            // Atomically decrement counter used to synchronize with main thread
+            // and notify the main thread if all tasks have completed
+            if (counter_.fetch_sub(1, std::memory_order_release) == 1) {
+                counter_.notify_all();
+            }
+        }
+    });
+    auto numa_node = tt::Cluster::instance().get_numa_node_for_device(instance);
+
+    auto& cpu_cores_on_node = cpu_cores_per_numa_node[numa_node];
+    auto cpu_core_for_worker = cpu_cores_on_node[(instance + offset) % cpu_cores_on_node.size()];
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_core_for_worker, &cpuset);
+    int rc = pthread_setaffinity_np(worker.native_handle(), sizeof(cpu_set_t), &cpuset);
+    if (rc) {
+        log_warning(
+            tt::LogMetal,
+            "Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: {}",
+            rc);
+    } else {
+        std::cout << "Allocate thread: " << instance << " on " << cpu_core_for_worker << " node " << numa_node
+                  << std::endl;
+    }
+}
+
+Executor::~Executor() {
+    shutdown_ = true;
+    task_semaphore_.release();
+    worker.join();
+}
+
+void Executor::enqueue(std::function<void()>&& f) {
+    tasks_.push(std::move(f));  // Move the task directly into queue
+    task_semaphore_.release();  // Notify a worker that a task is available
+    // Light-Weight counter increment to track the number of tasks in flight
+    // Need this because a counting_semaphore does not allow querying state
+    counter_++;
+}
+
+void Executor::wait() const {
+    // Wait until all tasks have completed (counter_ == 0)
+    // To avoid spinning, sleep until notified by the worker threads
+    // or counter_ changes (this only happens with a spurious wakeup)
+    int current;
+    while ((current = counter_.load(std::memory_order_acquire)) > 0) {
+        counter_.wait(current, std::memory_order_relaxed);
+    }
+}
+
+AsyncDispatcher::AsyncDispatcher(uint32_t thread_count, uint32_t offset) {
+    dispatchers_.reserve(thread_count);
+    for (uint32_t i = 0; i < thread_count; i++) {
+        dispatchers_.emplace_back(std::make_unique<Executor>(i, offset));  // Constructs Executor in-place
+    }
+}
+
+void AsyncDispatcher::enqueue(std::function<void()>&& f, uint32_t thread_idx) {
+    dispatchers_[thread_idx]->enqueue(std::move(f));
+}
+
+void AsyncDispatcher::wait() const {
+    for (auto& dispatcher : dispatchers_) {
+        dispatcher->wait();
+    }
+}
+
 }  // namespace tt::tt_metal

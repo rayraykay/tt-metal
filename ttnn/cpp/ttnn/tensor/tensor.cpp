@@ -861,7 +861,8 @@ void write_tensor(const Tensor& host_tensor, Tensor device_tensor, QueueId cq_id
                 .host_data = host_data[i],
             });
         }
-        mesh_device->mesh_command_queue().enqueue_write_shards(mesh_buffer, shard_data_transfers, /*blocking=*/false);
+        mesh_device->mesh_command_queue(*cq_id).enqueue_write_shards(
+            mesh_buffer, shard_data_transfers, /*blocking=*/false);
         return;
     }
 

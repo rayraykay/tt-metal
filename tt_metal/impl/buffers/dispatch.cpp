@@ -285,15 +285,22 @@ void issue_buffer_dispatch_command_sequence(
                 false, dispatch_message_addr, dispatch_params.expected_num_workers_completed[offset_index]);
         }
     }
-    if constexpr (std::is_same_v<T, ShardedBufferWriteDispatchParams>) {
-        populate_sharded_buffer_write_dispatch_cmds(src, command_sequence, buffer, dispatch_params);
-    } else {
-        populate_interleaved_buffer_write_dispatch_cmds(src, command_sequence, buffer, dispatch_params);
+    {
+        ZoneScopedN("IssueWrite");
+        if constexpr (std::is_same_v<T, ShardedBufferWriteDispatchParams>) {
+            ZoneScopedN("PopulateCommands");
+            populate_sharded_buffer_write_dispatch_cmds(src, command_sequence, buffer, dispatch_params);
+        } else {
+            ZoneScopedN("PopulateCommands");
+            populate_interleaved_buffer_write_dispatch_cmds(src, command_sequence, buffer, dispatch_params);
+        }
+        {
+            ZoneScopedN("FetchQReserve");
+            sysmem_manager.issue_queue_push_back(cmd_sequence_sizeB, dispatch_params.cq_id);
+            sysmem_manager.fetch_queue_reserve_back(dispatch_params.cq_id);
+            sysmem_manager.fetch_queue_write(cmd_sequence_sizeB, dispatch_params.cq_id);
+        }
     }
-
-    sysmem_manager.issue_queue_push_back(cmd_sequence_sizeB, dispatch_params.cq_id);
-    sysmem_manager.fetch_queue_reserve_back(dispatch_params.cq_id);
-    sysmem_manager.fetch_queue_write(cmd_sequence_sizeB, dispatch_params.cq_id);
 }
 
 // Top level helper functions to write buffer data
@@ -551,6 +558,7 @@ void write_to_device_buffer(
         const auto cores =
             get_cores_for_sharded_buffer(dispatch_params.width_split, dispatch_params.buffer_page_mapping, buffer);
         // Since we read core by core we are reading the device pages sequentially
+        ZoneScopedN("WriteShardedBuffer");
         for (uint32_t core_id = 0; core_id < buffer.num_cores(); ++core_id) {
             write_sharded_buffer_to_core(
                 src,
@@ -826,8 +834,11 @@ void copy_completion_queue_data_into_user_space(
     uint32_t pad_size_bytes = padded_page_size - page_size;
 
     while (remaining_bytes_to_read != 0) {
-        uint32_t completion_queue_write_ptr_and_toggle =
-            sysmem_manager.completion_queue_wait_front(cq_id, exit_condition);
+        uint32_t completion_queue_write_ptr_and_toggle = 0;
+        {
+            ZoneScopedN("CompletionQueueWait");
+            completion_queue_write_ptr_and_toggle = sysmem_manager.completion_queue_wait_front(cq_id, exit_condition);
+        }
 
         if (exit_condition) {
             break;
@@ -852,7 +863,7 @@ void copy_completion_queue_data_into_user_space(
         uint32_t num_pages_xfered = div_up(bytes_xfered, DispatchSettings::TRANSFER_PAGE_SIZE);
 
         remaining_bytes_to_read -= bytes_xfered;
-
+        ZoneScopedN("ReadTransfer");
         if (buffer_page_mapping == nullptr) {
             void* contiguous_dst = (void*)(uint64_t(dst) + contig_dst_offset);
             if (page_size == padded_page_size) {

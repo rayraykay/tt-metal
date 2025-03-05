@@ -5,6 +5,7 @@
 #include "command_queue_interface.hpp"
 
 #include "tt_cluster.hpp"
+#include <emmintrin.h>
 
 namespace tt::tt_metal {
 
@@ -53,6 +54,7 @@ template uint32_t get_cq_issue_wr_ptr<false>(chip_id_t chip_id, uint8_t cq_id, u
 
 template <bool addr_16B>
 uint32_t get_cq_completion_wr_ptr(chip_id_t chip_id, uint8_t cq_id, uint32_t cq_size) {
+    ZoneScopedN("GetWPtr");
     uint32_t recv;
     chip_id_t mmio_device_id = tt::Cluster::instance().get_associated_mmio_device(chip_id);
     uint16_t channel = tt::Cluster::instance().get_assigned_channel_for_device(chip_id);
