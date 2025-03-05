@@ -749,6 +749,10 @@ void Device::initialize_and_launch_firmware() {
         core_info->virtual_non_worker_cores[idx] = {CORE_COORD_INVALID, CORE_COORD_INVALID, AddressableCoreType::UNKNOWN};
     }
 
+    // On Blackhole, virtualized Tensix coordinates overlap with NoC1 physical DRAM coordinates beause virtualized
+    // Tensix coordinates == NoC0 Tensix physical coordinates. This causes false negative Watcher sanitization errors
+    // because it appears as a mixed use of physical and virtual To workaround this, skip over populating
+    // `non_worker_cores` for BH DRAM when virtualization is enabled
     int non_worker_cores_idx = 0;
     for (const tt::umd::CoreCoord& core : pcie_cores) {
         std::cout << "pcie core is " << core.str() << " virtual is "
@@ -759,11 +763,14 @@ void Device::initialize_and_launch_firmware() {
         std::cout << "\tupdated to " << translated_coord.str() << std::endl;
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::PCIE};
     }
-    for (const tt::umd::CoreCoord& core : dram_cores) {
-        std::cout << "dram core is " << core.str() << " virtual is "
-                  << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
-                  << std::endl;
-        core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::DRAM};
+    bool skip_physical_dram = this->arch() == ARCH::BLACKHOLE and hal.is_coordinate_virtualization_enabled();
+    if (not skip_physical_dram) {
+        for (const tt::umd::CoreCoord& core : dram_cores) {
+            std::cout << "dram core is " << core.str() << " virtual is "
+                    << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
+                    << std::endl;
+            core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::DRAM};
+        }
     }
     for (const tt::umd::CoreCoord& core : eth_cores) {
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::ETH};
