@@ -87,7 +87,7 @@ def run_all_reduce_impl(
         M, N = output_shape[2:]
         N_per_shard = round_up(math.ceil(N / input_num_cores), ttnn.TILE_SIZE)
         output_N_per_shard = round_up(math.ceil(N / output_num_cores), ttnn.TILE_SIZE)
-        input_shape = [*cluster_shape, M, N]
+        input_shape = [*cluster_shape, M, N]  # [8, 4, 32, 1280]
         intermediate_shape = [*input_shape[:-1], N * cluster_shape[cluster_axis]]
 
         CORE_RANGE = [(x, y) for y in range(compute_grid_size.y) for x in range(compute_grid_size.x)]
@@ -138,7 +138,7 @@ def run_all_reduce_impl(
             dtype=input_dtype,
             memory_config=input_mem_config,
             mesh_mapper=ttnn.ShardTensor2dMesh(mesh_device, dims=(0, 1), mesh_shape=cluster_shape),
-        )
+        )  # [1, 1, 32, 1280]
         check_mesh_tensor_alloc(tt_qkv)
 
         intermediate_tensor = torch.zeros(intermediate_shape)
@@ -183,9 +183,11 @@ def run_all_reduce_impl(
             topology=ttnn.Topology.Linear,
             num_links=num_links,
             subdevice_id=worker_sub_device_id,
-        )
+        )  # [1, 1, 32, 1280]
+
+        # Batch Slicing
+        # 32 BS is split into 8 Mini BS across 4 devices
         ttnn.synchronize_device(mesh_device)
-        breakpoint()
 
         (
             q_heads_pre_rot_1BQD,
@@ -199,7 +201,54 @@ def run_all_reduce_impl(
             overlap_qk_coregrid=False,
             batch_offset=batch_offset_tt_tensor,
             slice_size=8,
+        )  # [1, 8, 8[32], 128], [1, 8, 1[32], 128], [1, 8, 1[32], 128]
+
+        # After ConcatMesh2dToTensor
+        # [1, 8, 8[32], 128] -> [8, 32, 8[32], 128]
+
+        # Get non-distributed tensors
+        q_non_distributed = ttnn.to_torch(
+            q_heads_pre_rot_1BQD,
+            mesh_composer=ttnn.ConcatMesh2dToTensor(
+                mesh_device,
+                dims=(0, 1),
+                mesh_shape=cluster_shape,
+            ),
         )
+        # [1, 8, 1[32], 128] -> [8, 32, 1[32], 128]
+        k_non_distributed = ttnn.to_torch(
+            k_heads_pre_rot_1BKD,
+            mesh_composer=ttnn.ConcatMesh2dToTensor(
+                mesh_device,
+                dims=(0, 1),
+                mesh_shape=cluster_shape,
+            ),
+        )
+        # [1, 8, 1[32], 128] -> [8, 32, 1[32], 128]
+        v_non_distributed = ttnn.to_torch(
+            v_heads_1BKD,
+            mesh_composer=ttnn.ConcatMesh2dToTensor(
+                mesh_device,
+                dims=(0, 1),
+                mesh_shape=cluster_shape,
+            ),
+        )
+        breakpoint()
+
+        # input = [8, 4, 32, 1280]
+
+        # reduced_input = [8, 32, 1280]
+        reduced_input_tensor = input_tensor.sum(dim=1)
+
+        # reduced_input_reshaped = [8, 32, 10, 128]
+        reduced_input_tensor_reshaped = reduced_input_tensor.reshape(8, 32, 10, 128)
+
+        # q_output = [8, 32, 8, 128]
+        q_output_tensor = reduced_input_tensor_reshaped[:, :, :8, :]
+        # k_output = [8, 32, 1, 128]
+        k_output_tensor = reduced_input_tensor_reshaped[:, :, 8:9, :].unsqueeze(2)
+        # v_output = [8, 32, 1, 128]
+        v_output_tensor = reduced_input_tensor_reshaped[:, :, 9:10, :].unsqueeze(2)
 
     finally:
         if enable_persistent_fabric and teardown_persistent_fabric:
