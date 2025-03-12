@@ -16,6 +16,8 @@ from tests.ttnn.unit_tests.operations.ccl.test_ccl_common import (
     create_global_semaphore_with_same_address,
 )
 
+from tests.ttnn.utils_for_testing import assert_with_pcc
+
 from tests.tt_eager.python_api_testing.unit_testing.misc.test_matmul_1d_gather_in0 import (
     num_cores_to_rectangle_grid,
     round_up,
@@ -233,7 +235,7 @@ def run_all_reduce_impl(
                 mesh_shape=cluster_shape,
             ),
         )
-        breakpoint()
+        # breakpoint()
 
         # input = [8, 4, 32, 1280]
 
@@ -245,10 +247,17 @@ def run_all_reduce_impl(
 
         # q_output = [8, 32, 8, 128]
         q_output_tensor = reduced_input_tensor_reshaped[:, :, :8, :]
+
         # k_output = [8, 32, 1, 128]
-        k_output_tensor = reduced_input_tensor_reshaped[:, :, 8:9, :].unsqueeze(2)
+        k_output_tensor = reduced_input_tensor_reshaped[:, :, 8:9, :]
+
         # v_output = [8, 32, 1, 128]
-        v_output_tensor = reduced_input_tensor_reshaped[:, :, 9:10, :].unsqueeze(2)
+        v_output_tensor = reduced_input_tensor_reshaped[:, :, 9:10, :]
+
+        # Compare results
+        assert_with_pcc(q_output_tensor, q_non_distributed, 0.9999)
+        assert_with_pcc(k_output_tensor, k_non_distributed, 0.9999)
+        assert_with_pcc(v_output_tensor, v_non_distributed, 0.9999)
 
     finally:
         if enable_persistent_fabric and teardown_persistent_fabric:
