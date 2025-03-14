@@ -576,7 +576,7 @@ Tensor to_host_mesh_tensor(const Tensor& tensor, bool blocking, ttnn::QueueId cq
     const auto& mesh_buffer = storage.mesh_buffer;
     ttnn::MeshDevice* device = mesh_buffer->device();
     distributed::MeshCommandQueue& mesh_cq = device->mesh_command_queue(*cq_id);
-    const auto num_buffers = storage.specs.size();
+    const auto num_buffers = storage.specs.empty() ? device->shape().mesh_size() : storage.specs.size();
 
     std::vector<distributed::MeshCommandQueue::ShardDataTransfer> shard_data_transfers;
     std::vector<TensorSpec> specs;
@@ -584,17 +584,32 @@ Tensor to_host_mesh_tensor(const Tensor& tensor, bool blocking, ttnn::QueueId cq
     buffers.reserve(num_buffers);
     specs.reserve(num_buffers);
     shard_data_transfers.reserve(num_buffers);
-    for (const auto& [coord, shard_tensor_spec] : storage.specs) {
-        std::vector<T> host_buffer;
-        const auto tensor_size_bytes = shard_tensor_spec.compute_packed_buffer_size_bytes();
-        host_buffer.resize(tensor_size_bytes / sizeof(T));
-        specs.push_back(shard_tensor_spec);
-        buffers.push_back(owned_buffer::create<T>(std::move(host_buffer)));
-
-        shard_data_transfers.push_back(distributed::MeshCommandQueue::ShardDataTransfer{
-            .shard_coord = coord,
-            .host_data = std::visit([](auto& b) { return reinterpret_cast<T*>(b.data()); }, buffers.back()),
-            .region = BufferRegion(0, tensor_size_bytes)});
+    if (storage.specs.empty()) {
+        // Assume uniform specs, if not specified.
+        const auto& shard_tensor_spec = tensor.get_tensor_spec();
+        for (const auto& coord : distributed::MeshCoordinateRange(device->shape())) {
+            std::vector<T> host_buffer;
+            const auto tensor_size_bytes = shard_tensor_spec.compute_packed_buffer_size_bytes();
+            host_buffer.resize(tensor_size_bytes / sizeof(T));
+            specs.push_back(shard_tensor_spec);
+            buffers.push_back(owned_buffer::create<T>(std::move(host_buffer)));
+            shard_data_transfers.push_back(distributed::MeshCommandQueue::ShardDataTransfer{
+                .shard_coord = coord,
+                .host_data = std::visit([](auto& b) { return reinterpret_cast<T*>(b.data()); }, buffers.back()),
+                .region = BufferRegion(0, tensor_size_bytes)});
+        }
+    } else {
+        for (const auto& [coord, shard_tensor_spec] : storage.specs) {
+            std::vector<T> host_buffer;
+            const auto tensor_size_bytes = shard_tensor_spec.compute_packed_buffer_size_bytes();
+            host_buffer.resize(tensor_size_bytes / sizeof(T));
+            specs.push_back(shard_tensor_spec);
+            buffers.push_back(owned_buffer::create<T>(std::move(host_buffer)));
+            shard_data_transfers.push_back(distributed::MeshCommandQueue::ShardDataTransfer{
+                .shard_coord = coord,
+                .host_data = std::visit([](auto& b) { return reinterpret_cast<T*>(b.data()); }, buffers.back()),
+                .region = BufferRegion(0, tensor_size_bytes)});
+        }
     }
 
     mesh_cq.enqueue_read_shards(shard_data_transfers, mesh_buffer, blocking);
@@ -748,12 +763,7 @@ DeviceStorage replicate_to_mesh_buffer(
     mesh_device->mesh_command_queue(*cq_id).enqueue_write_mesh_buffer(
         mesh_buffer, data_to_write.data(), /*blocking=*/false);
 
-    std::vector<std::pair<distributed::MeshCoordinate, TensorSpec>> specs;
-    specs.reserve(mesh_device->shape().mesh_size());
-    for (const auto& coord : distributed::MeshCoordinateRange(mesh_device->shape())) {
-        specs.push_back(std::make_pair(coord, tensor_spec));
-    }
-    return DeviceStorage(mesh_buffer, ReplicateTensor(), std::move(specs));
+    return DeviceStorage(mesh_buffer, ReplicateTensor(), /*specs_=*/{});
 }
 
 template <typename T>
