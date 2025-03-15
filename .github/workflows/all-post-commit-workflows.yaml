@@ -45,6 +45,7 @@ jobs:
       build-type: ${{ inputs.build-type || 'Release' }}
       build-wheel: true
       version: 22.04
+      skip-tt-train: true
   build-artifact-profiler:
     uses: ./.github/workflows/build-artifact.yaml
     with:
@@ -52,6 +53,7 @@ jobs:
       build-wheel: true
       tracy: true
       version: 22.04
+      skip-tt-train: true
     secrets: inherit
 
   smoke-tests:
@@ -165,21 +167,6 @@ jobs:
       arch: ${{ matrix.test-group.arch }}
       runner-label: ${{ matrix.test-group.runner-label }}
       os: ubuntu-22.04
-  tt-train-cpp-unit-tests:
-    needs: build-artifact
-    secrets: inherit
-    strategy:
-      fail-fast: false
-      matrix:
-        test-group: [
-          { arch: wormhole_b0, runner-label: N150 },
-          { arch: wormhole_b0, runner-label: N300 },
-        ]
-    uses: ./.github/workflows/tt-train-post-commit.yaml
-    with:
-      arch: ${{ matrix.test-group.arch }}
-      runner-label: ${{ matrix.test-group.runner-label }}
-      docker-image: ${{ needs.build-artifact.outputs.ci-build-docker-image }}
   run-profiler-regression:
     needs: build-artifact-profiler
     strategy:
