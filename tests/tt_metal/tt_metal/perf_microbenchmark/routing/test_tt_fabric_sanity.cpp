@@ -1492,6 +1492,8 @@ int main(int argc, char **argv) {
     global_rng.seed(prng_seed);
     time_seed = std::chrono::system_clock::now().time_since_epoch().count();
 
+    log_info(LogTest, "seed: {}", prng_seed);
+
     try {
         test_board_t test_board(board_type);
         num_available_devices = test_board.get_num_available_devices();
