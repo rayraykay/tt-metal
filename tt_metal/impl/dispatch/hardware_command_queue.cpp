@@ -597,4 +597,5 @@ void HWCommandQueue::terminate() {
 
 WorkerConfigBufferMgr& HWCommandQueue::get_config_buffer_mgr(uint32_t index) { return config_buffer_mgr_[index]; }
 
+// hello
 }  // namespace tt::tt_metal
