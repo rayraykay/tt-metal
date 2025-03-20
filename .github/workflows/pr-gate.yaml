@@ -61,7 +61,8 @@ jobs:
       fail-fast: false
       matrix:
         platform: [
-          "tt-beta-ubuntu-2204-n300-large-stable",
+          # "tt-beta-ubuntu-2204-n300-large-stable",
+          "N150",
         ]
     uses: ./.github/workflows/smoke.yaml
     with:
