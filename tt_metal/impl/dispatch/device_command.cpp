@@ -887,7 +887,9 @@ void DeviceCommand<hugepage_write>::deepcopy(const DeviceCommand& other) {
 }
 
 template <bool hugepage_write>
-void DeviceCommand<hugepage_write>::memcpy(void* __restrict dst, const void* __restrict src, size_t n) {
+void DeviceCommand<hugepage_write>::memcpy(void* __restrict__ dst, const void* __restrict__ src, size_t n) {
+    // TT_ASSERT(dst != nullptr, "Destination pointer must not be null");
+    // TT_ASSERT(src != nullptr, "Source pointer must not be null");
     if constexpr (hugepage_write) {
         memcpy_to_device(dst, src, n);
     } else {

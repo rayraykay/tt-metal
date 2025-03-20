@@ -198,7 +198,7 @@ private:
 
     void deepcopy(const DeviceCommand& other);
 
-    void memcpy(void* __restrict dst, const void* __restrict src, size_t n);
+    void memcpy(void* __restrict dst, const void* __restrict src, size_t n) __attribute__((nonnull(2, 3)));
 
     template <typename Command>
     void zero(Command* cmd) {
