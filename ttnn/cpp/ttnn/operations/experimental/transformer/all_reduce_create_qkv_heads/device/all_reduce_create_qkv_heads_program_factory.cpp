@@ -440,6 +440,15 @@ tt::tt_metal::operation::ProgramWithCallbacks all_reduce_create_qkv_heads_minima
     };
     tt::tt_metal::SetRuntimeArgs(program, reduction_kernel_id, output_tensor_cores, reduction_kernel_rt_args);
 
+    // Now prepare rt args for the reader and writer kernels
+    std::vector<uint32_t> reduction_reader_writer_runtime_args_template;
+    reduction_reader_writer_runtime_args_template.reserve(5 + 2 * in_num_cores);
+    reduction_reader_writer_runtime_args_template = {q_base_addr, batch_offset_tensor.buffer()->address(), 0, 0};
+    reduction_reader_writer_runtime_args_template.insert(
+        reduction_reader_writer_runtime_args_template.end(), noc_x_coords.begin(), noc_x_coords.end());
+    reduction_reader_writer_runtime_args_template.insert(
+        reduction_reader_writer_runtime_args_template.end(), noc_y_coords.begin(), noc_y_coords.end());
+
     // KERNEL CREATION
     tt::tt_metal::NOC reader_noc = tt::tt_metal::NOC::NOC_1;
     tt::tt_metal::NOC writer_noc = tt::tt_metal::NOC::NOC_0;
@@ -615,13 +624,14 @@ tt::tt_metal::operation::ProgramWithCallbacks all_reduce_create_qkv_heads_minima
         tt::tt_metal::SetRuntimeArgs(program, worker_sender_writer_kernel_id, {core}, writer_rt_args);
 
         // Set reduction worker runtime args
-        std::vector<uint32_t> reduction_reader_rt_args = {
-            reduction_semaphore_ids[link],  // reduction_semaphore_id
-        };
+        std::vector<uint32_t> reduction_reader_rt_args(reduction_reader_writer_runtime_args_template);
+        std::vector<uint32_t> reduction_writer_rt_args(reduction_reader_writer_runtime_args_template);
+        reduction_reader_rt_args.push_back(reduction_semaphore_ids[link]);
+        reduction_writer_rt_args.push_back(reduction_semaphore_ids[link]);
         tt::tt_metal::SetRuntimeArgs(
             program, reduction_reader_kernel_id, output_corerangeset_per_link[link], reduction_reader_rt_args);
         tt::tt_metal::SetRuntimeArgs(
-            program, reduction_writer_kernel_id, output_corerangeset_per_link[link], reduction_reader_rt_args);
+            program, reduction_writer_kernel_id, output_corerangeset_per_link[link], reduction_writer_rt_args);
     }
 
     auto override_runtime_arguments_callback =
