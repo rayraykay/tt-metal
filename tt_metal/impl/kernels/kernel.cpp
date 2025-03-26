@@ -7,6 +7,7 @@
 
 #include <fmt/core.h>
 #include <fmt/ranges.h>
+#include <iostream>
 
 #include <magic_enum/magic_enum.hpp>
 #include <set>
@@ -366,10 +367,12 @@ void DataMovementKernel::generate_binaries(IDevice* device, JitBuildOptions &bui
     uint32_t tensix_core_type = hal.get_programmable_core_type_index(this->get_kernel_programmable_core_type());
     uint32_t dm_class_idx = magic_enum::enum_integer(HalProcessorClassType::DM);
     int riscv_id = static_cast<std::underlying_type<DataMovementProcessor>::type>(this->config_.processor);
+    std::cout << "[Profile] : target riscv_id is " << riscv_id << std::endl;
     jit_build(
         BuildEnvManager::get_instance().get_kernel_build_state(
             device->build_id(), tensix_core_type, dm_class_idx, riscv_id),
         this);
+    std::cout << "[Profile] : jit build completed on " << riscv_id << std::endl;
 }
 
 void EthernetKernel::generate_binaries(IDevice* device, JitBuildOptions &build_options) const {

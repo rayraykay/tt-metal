@@ -5,6 +5,8 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <iostream>
+
 #include <circular_buffer_types.hpp>
 #include "common/executor.hpp"
 #include <profiler.hpp>
@@ -59,6 +61,8 @@ size_t KernelCompileHash(const std::shared_ptr<Kernel>& kernel, JitBuildOptions&
     // configuration (necessary for dispatch kernels).
     // Also account for watcher/dprint enabled in hash because they enable additional code to
     // be compiled into the kernel.
+    ZoneScopedN("KernelCompileHash");
+    std::cout << "[Profile] build_key included in kernel compile hash is " << build_key << std::endl;
     string compile_hash_str = fmt::format(
         "{}_{}_{}_{}",
         build_key,
@@ -1341,7 +1345,9 @@ void Program::allocate_kernel_bin_buf_on_device(IDevice* device) { pimpl_->alloc
 
 void detail::Program_::compile(IDevice* device, bool fd_bootloader_mode) {
     //ZoneScoped;
+    ZoneScopedN("Program_::compile");
     if (compiled_.contains(BuildEnvManager::get_instance().get_device_build_env(device->build_id()).build_key)) {
+        std::cout << "[Profile]: build environment exists in compiled_" << std::endl;
         return;
     }
     // Clear the determined sub_device_ids when we compile the program for the first time
@@ -1404,6 +1410,7 @@ void detail::Program_::compile(IDevice* device, bool fd_bootloader_mode) {
     };
     for (auto & kernels : kernels_) {
         for (auto &[id, kernel] : kernels) {
+            ZoneScopedN("GenerateKernelBinaries");
             validate_kernel_placement(kernel);
             launch_build_step(
                 [kernel, device, this] {
@@ -1426,11 +1433,17 @@ void detail::Program_::compile(IDevice* device, bool fd_bootloader_mode) {
                     bool cache_hit = true;
                     bool path_exists = std::filesystem::exists(build_options.path);
                     if (enable_persistent_kernel_cache && path_exists) {
+                        ZoneScopedN("KernelCacheHit");
+                        std::cout << "[Profile] : persistent kernel cache is enabled and path exists." << std::endl;
                         if (not detail::HashLookup::inst().exists(kernel_hash)) {
                             detail::HashLookup::inst().add(kernel_hash);
                             detail::HashLookup::inst().add_generated_bin(kernel_hash);
                         }
                     } else if (detail::HashLookup::inst().add(kernel_hash)) {
+                        ZoneScopedN("KernelCacheMiss");
+                        std::cout << "[Profile] : persistent kernel cache is disabled or path doesn't exists. "
+                                  << std::endl;
+                        std::cout << "[Profile] : kernel compile hash doesn't exist. kernel cach miss" << std::endl;
                         GenerateBinaries(device, build_options, kernel);
                         cache_hit = false;
                         detail::HashLookup::inst().add_generated_bin(kernel_hash);
@@ -1446,6 +1459,7 @@ void detail::Program_::compile(IDevice* device, bool fd_bootloader_mode) {
 
     for (auto &kernels : kernels_) {
         for (auto &[id, kernel] : kernels) {
+            ZoneScopedN("ReadKernelBinaries");
             launch_build_step([kernel, device] { kernel->read_binaries(device); }, events);
         }
     }

@@ -6,6 +6,7 @@
 #include <command_queue_interface.hpp>
 #include "tt_cluster.hpp"
 #include "impl/dispatch/dispatch_core_manager.hpp"
+#include <iostream>
 
 namespace tt::tt_metal {
 
@@ -213,6 +214,14 @@ void BuildEnvManager::add_build_env(chip_id_t device_id, uint8_t num_hw_cqs) {
 const DeviceBuildEnv& BuildEnvManager::get_device_build_env(chip_id_t device_id) {
     const std::lock_guard<std::mutex> lock(this->lock);
     TT_ASSERT(device_id_to_build_env_.count(device_id) != 0, "Couldn't find build env for device {}.", device_id);
+    std::cout << "\n[Profile] Device Build Environment:" << std::endl;
+    std::cout << "  Device ID: " << device_id << std::endl;
+    std::cout << "  Build Key: 0x" << std::hex << device_id_to_build_env_[device_id].build_key << std::dec << std::endl;
+    std::cout << "  Firmware Build States Size: " << device_id_to_build_env_[device_id].firmware_build_states.size()
+              << std::endl;
+    std::cout << "  Kernel Build States Size: " << device_id_to_build_env_[device_id].kernel_build_states.size()
+              << std::endl;
+    std::cout << std::endl;
     return device_id_to_build_env_[device_id];
 }
 

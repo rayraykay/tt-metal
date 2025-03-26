@@ -8,6 +8,7 @@
 #include <fstream>
 #include <span>
 #include <string>
+#include <iostream>
 
 #include "common/executor.hpp"
 #include "jit_build/genfiles.hpp"
@@ -816,6 +817,7 @@ void JitBuildState::build(const JitBuildSettings* settings) const {
 
 void jit_build(const JitBuildState& build, const JitBuildSettings* settings) {
     // ZoneScoped;
+    ZoneScopedN("JitBuild");
 
     build.build(settings);
 }
