@@ -527,6 +527,7 @@ class cross_attention:
                 self.scale,
                 memory_config=attention_scores.memory_config(),
             )
+            print(ttnn.to_torch(attention_scores))
             breakpoint()
             attention_scores_temp.deallocate()
             attention_scores = ttnn.softmax_in_place(
