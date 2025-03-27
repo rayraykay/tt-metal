@@ -332,10 +332,9 @@ void DeviceProfiler::logPacketData(
 
     if (packet_type == kernel_profiler::TS_DATA) {
         if (this->current_zone_it != device_events.end()) {
-            // Check if we are in NCRISC Dispatch zone. If so, we could have gotten dispatch meta data packets
+            // Check if we are in a Dispatch zone. If so, we could have gotten dispatch meta data packets
             // These packets can amend parent zone's info
-            if (tracy::riscName[risc_num] == "NCRISC" &&
-                this->current_zone_it->zone_phase == tracy::TTDeviceEventPhase::begin &&
+            if (this->current_zone_it->zone_phase == tracy::TTDeviceEventPhase::begin &&
                 this->current_zone_it->zone_name.find("DISPATCH") != std::string::npos) {
                 if (zone_name.find("process_cmd") != std::string::npos) {
                     this->current_dispatch_meta_data.cmd_type =
@@ -344,6 +343,13 @@ void DeviceProfiler::logPacketData(
                 } else if (zone_name.find("runtime_host_id_dispatch") != std::string::npos) {
                     this->current_dispatch_meta_data.worker_runtime_id = (uint32_t)data;
                     metaData["workers_runtime_id"] = this->current_dispatch_meta_data.worker_runtime_id;
+                }
+                std::string newZoneName = this->current_dispatch_meta_data.cmd_type;
+                if (tracy::riscName[risc_num] == "NCRISC") {
+                    newZoneName = fmt::format(
+                        "{}:{}",
+                        this->current_dispatch_meta_data.worker_runtime_id,
+                        this->current_dispatch_meta_data.cmd_type);
                 }
                 tracy::TTDeviceEvent event = tracy::TTDeviceEvent(
                     this->current_dispatch_meta_data.worker_runtime_id,
@@ -355,10 +361,7 @@ void DeviceProfiler::logPacketData(
                     this->current_zone_it->timestamp,
                     this->current_zone_it->line,
                     this->current_zone_it->file,
-                    fmt::format(
-                        "{}:{}",
-                        this->current_dispatch_meta_data.worker_runtime_id,
-                        this->current_dispatch_meta_data.cmd_type),
+                    newZoneName,
                     this->current_zone_it->zone_phase);
                 device_events.erase(this->current_zone_it);
                 auto ret = device_events.insert(event);

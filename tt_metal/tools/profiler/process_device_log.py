@@ -22,6 +22,8 @@ import tt_metal.tools.profiler.device_post_proc_config as device_post_proc_confi
 
 SUM_MARKER_ID_START = 3000
 
+dispatchCores = set()
+
 
 def coreCompare(core):
     if type(core) == str:
@@ -193,7 +195,6 @@ def extract_device_info(deviceInfo):
 
 def import_device_profile_log(logPath):
     devicesData = {"devices": {}}
-    doOpsDetection = True
     with open(logPath) as csvFile:
         csvReader = csv.reader(csvFile, delimiter=",")
         arch = ""
@@ -209,9 +210,9 @@ def import_device_profile_log(logPath):
                 risc = row[3].strip()
                 timerID = {"id": int(row[4].strip()), "zone_name": "", "type": "", "src_line": "", "src_file": ""}
                 timeData = int(row[5].strip())
-                statData = 0
+                attachedData = 0
                 if len(row) == 14:
-                    statData = int(row[6].strip())
+                    attachedData = int(row[6].strip())
                     timerID["run_id"] = int(row[7].strip())
                     timerID["run_host_id"] = int(row[8].strip())
                     timerID["zone_name"] = row[9].strip()
@@ -224,25 +225,20 @@ def import_device_profile_log(logPath):
                     if core in devicesData["devices"][chipID]["cores"].keys():
                         if risc in devicesData["devices"][chipID]["cores"][core]["riscs"].keys():
                             devicesData["devices"][chipID]["cores"][core]["riscs"][risc]["timeseries"].append(
-                                (timerID, timeData, statData)
+                                (timerID, timeData, attachedData)
                             )
                         else:
                             devicesData["devices"][chipID]["cores"][core]["riscs"][risc] = {
-                                "timeseries": [(timerID, timeData, statData)]
+                                "timeseries": [(timerID, timeData, attachedData)]
                             }
                     else:
                         devicesData["devices"][chipID]["cores"][core] = {
-                            "riscs": {risc: {"timeseries": [(timerID, timeData, statData)]}}
+                            "riscs": {risc: {"timeseries": [(timerID, timeData, attachedData)]}}
                         }
                 else:
                     devicesData["devices"][chipID] = {
-                        "cores": {core: {"riscs": {risc: {"timeseries": [(timerID, timeData, statData)]}}}}
+                        "cores": {core: {"riscs": {risc: {"timeseries": [(timerID, timeData, attachedData)]}}}}
                     }
-                if doOpsDetection and "zone_name" in timerID.keys() and "dispatch" in timerID["zone_name"].lower():
-                    logger.warning(
-                        "Dispatch core data detected: Stats across ops are skipped as op detection cannot work with dispatch data present. Please turn off dispatch core profiling."
-                    )
-                    doOpsDetection = False
 
     def sort_timeseries_and_find_min(devicesData):
         globalMinTS = (1 << 64) - 1
@@ -267,8 +263,10 @@ def import_device_profile_log(logPath):
             for core, coreData in deviceData["cores"].items():
                 for risc, riscData in coreData["riscs"].items():
                     riscData["timeseries"].sort(key=lambda x: x[1])
-                    for marker, timestamp, statData in riscData["timeseries"]:
+                    for marker, timestamp, attachedData in riscData["timeseries"]:
                         shiftedTS = timestamp - globalMinTS
+                        if "CQ-DISPATCH" in marker["zone_name"] or "CQ-PREFETCH" in marker["zone_name"]:
+                            dispatchCores.add((chipID, core, risc))
                     riscData["timeseries"].insert(
                         0,
                         (
@@ -288,7 +286,7 @@ def import_device_profile_log(logPath):
     # Sort all timeseries and find global min timestamp
     sort_timeseries_and_find_min(devicesData)
 
-    return devicesData, doOpsDetection
+    return devicesData
 
 
 def get_ops(timeseries):
@@ -318,7 +316,7 @@ def get_ops(timeseries):
         op.sort(key=lambda ts: ts[1])
         for ts in op:
             if len(ts) == 5:
-                timerID, tsValue, statData, risc, core = ts
+                timerID, tsValue, attachedData, risc, core = ts
                 opCores[core] = None
 
         for ts in op:
@@ -327,7 +325,7 @@ def get_ops(timeseries):
                 continue
             opIsDone = False
             if len(ts) == 5:
-                timerID, tsValue, statData, risc, core = ts
+                timerID, tsValue, attachedData, risc, core = ts
                 if opCores[core]:
                     if (risc == "BRISC" and timerID["zone_name"] == "BRISC-FW" and timerID["type"] == "ZONE_START") or (
                         risc == "ERISC" and timerID["zone_name"] == "ERISC-FW" and timerID["type"] == "ZONE_START"
@@ -349,7 +347,7 @@ def get_ops(timeseries):
                     ):
                         opCores[core] = (timerID,)
             if len(ts) == 4:
-                timerID, tsValue, statData, risc = ts
+                timerID, tsValue, attachedData, risc = ts
                 if (risc == "BRISC" and timerID["zone_name"] == "BRISC-FW" and timerID["type"] == "ZONE_END") or (
                     risc == "ERISC" and timerID["zone_name"] == "ERISC-FW" and timerID["type"] == "ZONE_END"
                 ):
@@ -363,7 +361,67 @@ def get_ops(timeseries):
     return ops
 
 
+def get_dispatch_core_ops(timeseries):
+    masterRisc = "NCRISC"
+    slaveRisc = "BRISC"
+    riscData = {
+        masterRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": []},
+        slaveRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": []},
+    }
+    for ts in timeseries:
+        timerID, tsValue, attachedData, risc = ts
+        riscData[risc]["zone"].append(ts)
+
+        if "meta_data" in timerID and "workers_runtime_id" in timerID["meta_data"]:
+            riscData[risc]["opID"] = eval(timerID["meta_data"])["workers_runtime_id"]
+
+        if "meta_data" in timerID and "CQ_DISPATCH_CMD_SEND_GO_SIGNAL" in timerID["meta_data"]:
+            riscData[risc]["opID"] += 1
+
+        if "type" in timerID and timerID["type"] == "ZONE_END":
+            if riscData[risc]["opID"] not in riscData[risc]["ops"]:
+                riscData[risc]["ops"][riscData[risc]["opID"]] = riscData[risc]["zone"].copy()
+            else:
+                riscData[risc]["ops"][riscData[risc]["opID"]] += riscData[risc]["zone"]
+            riscData[risc]["zone"] = []
+
+    for risc, data in riscData.items():
+        data["orderedOpIDs"] = list(data["ops"].keys())
+        # sort over timestamps
+        data["orderedOpIDs"].sort(key=lambda x: data["ops"][x][0][1])
+
+    opsDict = {}
+    print(len(riscData[masterRisc]["orderedOpIDs"]), len(riscData[slaveRisc]["orderedOpIDs"]))
+    for masterOpID, slaveOpID in zip(riscData[masterRisc]["orderedOpIDs"], riscData[slaveRisc]["orderedOpIDs"]):
+        opsDict[masterOpID] = riscData[masterRisc]["ops"][masterOpID] + riscData[slaveRisc]["ops"][slaveOpID]
+        opsDict[masterOpID].sort(key=lambda x: x[1])
+
+    # for opID, op in opsDict.items():
+    # print (f"================{opID}================")
+    # for data in op:
+    # print (data)
+
+    # ops = []
+
+    # ops.append({"timeseries": []})
+    # for opID in ordered_ops:
+    # if opID == 0:
+    # continue
+    # op = opsDict[opID]
+    # print (f"================{opID}================")
+    # for zone in op:
+    # print (zone)
+
+    # print (f"{opID:3}, {op[0][1]}")
+    # for ts in timeseries:
+    # timerID, tsValue, risc, core = ts
+
+
 def risc_to_core_timeseries(devicesData, detectOps):
+    dispatchCoresNoRisc = set()
+    for chip, core, risc in dispatchCores:
+        dispatchCoresNoRisc.add((chip, core))
+
     for chipID, deviceData in devicesData["devices"].items():
         for core, coreData in deviceData["cores"].items():
             tmpTimeseries = []
@@ -376,7 +434,10 @@ def risc_to_core_timeseries(devicesData, detectOps):
 
             ops = []
             if detectOps:
-                ops = get_ops(tmpTimeseries)
+                if (chipID, core) in dispatchCoresNoRisc:
+                    ops = get_dispatch_core_ops(tmpTimeseries)
+                else:
+                    ops = get_ops(tmpTimeseries)
 
             coreData["riscs"]["TENSIX"] = {"timeseries": tmpTimeseries, "ops": ops}
 
@@ -484,7 +545,7 @@ def determine_conditions(timerID, metaData, analysis):
 def first_last_analysis(timeseries, analysis):
     durations = []
     startFound = None
-    for index, (timerID, timestamp, statData, *metaData) in enumerate(timeseries):
+    for index, (timerID, timestamp, attachedData, *metaData) in enumerate(timeseries):
         currStart, currEnd, desStart, desEnd = determine_conditions(timerID, metaData, analysis)
         if not startFound:
             if currStart in desStart:
@@ -494,7 +555,7 @@ def first_last_analysis(timeseries, analysis):
     if startFound:
         startIndex, startID, startTS = startFound
         for i in range(len(timeseries) - 1, startIndex, -1):
-            timerID, timestamp, statData, *metaData = timeseries[i]
+            timerID, timestamp, attachedData, *metaData = timeseries[i]
             currStart, currEnd, desStart, desEnd = determine_conditions(timerID, metaData, analysis)
             if currEnd in desEnd:
                 durations.append(
@@ -535,10 +596,10 @@ def op_core_first_last_analysis(riscData, analysis):
 
 def get_duration(riscData, analysis):
     totalDuration = 0
-    for index, (timerID, timestamp, statData, risc, core) in enumerate(riscData["timeseries"]):
+    for index, (timerID, timestamp, attachedData, risc, core) in enumerate(riscData["timeseries"]):
         desMarker = {"risc": risc, "zone_name": timerID["zone_name"]}
         if desMarker == analysis["marker"]:
-            totalDuration += statData
+            totalDuration += attachedData
     if totalDuration:
         return [dict(duration_type=analysis["marker"], duration_cycles=totalDuration)]
     return []
@@ -548,7 +609,7 @@ def adjacent_LF_analysis(riscData, analysis):
     timeseries = riscData["timeseries"]
     durations = []
     startFound = None
-    for timerID, timestamp, statData, *metaData in timeseries:
+    for timerID, timestamp, attachedData, *metaData in timeseries:
         currStart, currEnd, desStart, desEnd = determine_conditions(timerID, metaData, analysis)
         if not startFound:
             if currStart in desStart:
@@ -617,11 +678,11 @@ def timeseries_events(riscData, name, analysis):
         else:
             riscData["events"][name] = []
 
-        for index, (timerID, timestamp, statData, risc, *_) in enumerate(riscData["timeseries"]):
+        for index, (timerID, timestamp, attachedData, risc, *_) in enumerate(riscData["timeseries"]):
             if (timerID["type"] == "TS_EVENT" or timerID["type"] == "TS_DATA") and (
                 risc == analysis["marker"]["risc"] or analysis["marker"]["risc"] == "ANY"
             ):
-                riscData["events"][name].append((timerID, timestamp, statData, risc, *_))
+                riscData["events"][name].append((timerID, timestamp, attachedData, risc, *_))
 
 
 def core_analysis(name, analysis, devicesData):
@@ -715,10 +776,10 @@ def validate_setup(ctx, param, setup):
 
 
 def import_log_run_stats(setup=device_post_proc_config.default_setup()):
-    devicesData, doOpsDetection = import_device_profile_log(setup.deviceInputLog)
-    if not doOpsDetection:
-        setup.detectOps = False
+    devicesData = import_device_profile_log(setup.deviceInputLog)
+
     risc_to_core_timeseries(devicesData, setup.detectOps)
+    sys.exit(0)
     core_to_device_timeseries(devicesData, setup.detectOps)
 
     for name, analysis in sorted(setup.timerAnalysis.items()):
