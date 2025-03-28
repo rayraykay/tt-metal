@@ -365,15 +365,21 @@ def get_dispatch_core_ops(timeseries):
     masterRisc = "NCRISC"
     slaveRisc = "BRISC"
     riscData = {
-        masterRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": []},
-        slaveRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": []},
+        masterRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": [], "opFinished": False},
+        slaveRisc: {"zone": [], "opID": 0, "ops": {}, "orderedOpIDs": [], "opFinished": False},
     }
     for ts in timeseries:
         timerID, tsValue, attachedData, risc = ts
         riscData[risc]["zone"].append(ts)
 
         if "meta_data" in timerID and "workers_runtime_id" in timerID["meta_data"]:
+            riscData[risc]["opFinished"] = False
             riscData[risc]["opID"] = eval(timerID["meta_data"])["workers_runtime_id"]
+            if riscData[risc]["opID"] in riscData[risc]["ops"].keys():
+                riscData[risc]["opID"] = 0
+
+        if "meta_data" in timerID and "CQ_DISPATCH_NOTIFY_SLAVE_GO_SIGNAL" in timerID["meta_data"]:
+            riscData[risc]["opFinished"] = True
 
         if "meta_data" in timerID and "CQ_DISPATCH_CMD_SEND_GO_SIGNAL" in timerID["meta_data"]:
             riscData[risc]["opID"] += 1
@@ -384,6 +390,8 @@ def get_dispatch_core_ops(timeseries):
             else:
                 riscData[risc]["ops"][riscData[risc]["opID"]] += riscData[risc]["zone"]
             riscData[risc]["zone"] = []
+            if riscData[risc]["opFinished"]:
+                riscData[risc]["opID"] = 0
 
     for risc, data in riscData.items():
         data["orderedOpIDs"] = list(data["ops"].keys())
@@ -391,15 +399,15 @@ def get_dispatch_core_ops(timeseries):
         data["orderedOpIDs"].sort(key=lambda x: data["ops"][x][0][1])
 
     opsDict = {}
-    print(len(riscData[masterRisc]["orderedOpIDs"]), len(riscData[slaveRisc]["orderedOpIDs"]))
     for masterOpID, slaveOpID in zip(riscData[masterRisc]["orderedOpIDs"], riscData[slaveRisc]["orderedOpIDs"]):
         opsDict[masterOpID] = riscData[masterRisc]["ops"][masterOpID] + riscData[slaveRisc]["ops"][slaveOpID]
         opsDict[masterOpID].sort(key=lambda x: x[1])
 
-    # for opID, op in opsDict.items():
-    # print (f"================{opID}================")
-    # for data in op:
-    # print (data)
+    for opID, op in opsDict.items():
+        print(f"================{opID}================")
+        for data in op:
+            d, t, m, r = data
+            print(d, r)
 
     # ops = []
 
