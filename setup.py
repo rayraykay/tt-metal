@@ -12,6 +12,26 @@ from pathlib import Path
 from setuptools import setup, Extension, find_namespace_packages
 from setuptools.command.build_ext import build_ext
 
+import shutil
+
+
+def safe_copytree(src, dst):
+    if os.path.exists(dst):
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+
+
+# --- Copy extra files into the package structure ---
+# Copy cpp → ttnn/ttnn/cpp
+cpp_src = os.path.join("ttnn", "cpp", "ttnn")
+cpp_dst = os.path.join("ttnn", "ttnn", "cpp")
+safe_copytree(cpp_src, cpp_dst)
+
+# Copy tt_metal → ttnn/ttnn/tt_metal
+metal_src = "tt_metal"
+metal_dst = os.path.join("ttnn", "ttnn", "tt_metal")
+safe_copytree(metal_src, metal_dst)
+
 
 class EnvVarNotFoundException(Exception):
     pass
@@ -163,10 +183,7 @@ class CMakeBuild(build_ext):
         return self.inplace
 
 
-packages = find_namespace_packages(where="ttnn")
-packages = [item for item in packages if not item.startswith("cpp")]
-packages.append("tt_metal")
-packages.append("ttnn.cpp")
+packages = find_namespace_packages(where="ttnn", exclude=["cpp", "cpp.*, *.cpp"])
 
 print(("packaging: ", packages))
 
@@ -181,18 +198,56 @@ build_constants_lookup = {
     ttnn_lib_C: BuildConstants(so_src_location="lib/_ttnn.so"),
 }
 
+
+def expand_patterns(patterns):
+    """
+    Given a list of glob patterns with brace expansion (e.g. `*.{h,hpp}`),
+    return a flat list of glob patterns with the braces expanded.
+
+    It does not check if the files exist.
+    """
+    expanded = []
+
+    for pattern in patterns:
+        if "{" in pattern and "}" in pattern:
+            pre = pattern[: pattern.find("{")]
+            post = pattern[pattern.find("}") + 1 :]
+            options = pattern[pattern.find("{") + 1 : pattern.find("}")].split(",")
+
+            for opt in options:
+                expanded.append(f"{pre}{opt}{post}")
+        else:
+            expanded.append(pattern)
+
+    return expanded
+
+
+ttnn_patterns = [
+    "cpp/**/kernels/**/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/api/tt-metalium/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/impl/dispatch/kernels/**/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/kernels/**/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/tools/profiler/*.{h,hpp,c,cc,cpp}",
+    "tt_metal/fabric/mesh_graph_descriptors/*.yaml",
+    "tt_metal/core_descriptors/*.yaml",
+    "tt_metal/soc_descriptors/*.yaml",
+]
+
+ttnn_package_data = expand_patterns(ttnn_patterns)
+
+print(ttnn_package_data)
 setup(
     url="http://www.tenstorrent.com",
     use_scm_version=get_version(metal_build_config),
     packages=packages,
     package_dir={
-        "": "ttnn",  # only this is relevant in case of editable install mode
-        "tt_metal": "tt_metal",  # kernels depend on headers here
-        "ttnn.cpp": "ttnn/cpp",
-        "tt_lib.models": "models",  # make sure ttnn does not depend on model and remove!!!
+        "": "ttnn",
     },
     package_data={
-        "ttnn.cpp": ["*.cpp", "*.hpp", "*.cc", "*.h"],
+        "ttnn": ttnn_package_data,
     },
     include_package_data=True,
     long_description_content_type="text/markdown",
