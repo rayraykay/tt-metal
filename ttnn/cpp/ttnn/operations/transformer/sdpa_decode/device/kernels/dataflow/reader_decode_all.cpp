@@ -148,7 +148,16 @@ void kernel_main() {
         }
         cb_reserve_back(cb_q_in, q_chunk_tiles);
         uint32_t q_write_ptr = get_write_ptr(cb_q_in);
-        noc_async_read(q_read_addr, q_write_ptr, q_chunk_tiles_bytes);
+        if constexpr (q_tile_bytes == 1024) {
+            // q_addr represents 32x32 tiles; read them as 16x32 tiles
+            for (uint8_t tile = 0; tile < q_chunk_tiles; tile++) {
+                noc_async_read(q_read_addr, q_write_ptr, q_tile_bytes);
+                q_read_addr += 2 * q_tile_bytes;
+                q_write_ptr += q_tile_bytes;
+            }
+        } else {
+            noc_async_read(q_read_addr, q_write_ptr, q_chunk_tiles_bytes);
+        }
         noc_async_read_barrier();
         cb_push_back(cb_q_in, q_chunk_tiles);
     } else {

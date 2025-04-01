@@ -339,12 +339,14 @@ operation::ProgramWithCallbacks sdpa_decode_multi_core(
     const auto half_tile = tt::tt_metal::Tile({16, 32});
     const auto full_tile = tt::tt_metal::Tile({32, 32});
 
-    const auto q_tile = full_tile;
+    const auto q_tile = half_tile;
     const auto k_tile = full_tile;
     const auto v_tile = full_tile;
     const auto mask_tile = full_tile;
     const auto out_tile = full_tile;
     const auto scalar_tile = full_tile;
+    const auto scalar_tile_half = half_tile;
+    const auto im_tile_half = half_tile;
     const auto im_tile = full_tile;
     const auto stats_tile = full_tile;
 
@@ -354,7 +356,9 @@ operation::ProgramWithCallbacks sdpa_decode_multi_core(
     uint32_t mask_tile_size = mask_tile.get_tile_size(mask_df);
     uint32_t out_tile_size = out_tile.get_tile_size(out_df);
     uint32_t scalar_tile_size = scalar_tile.get_tile_size(scalar_df);
+    uint32_t scalar_tile_size_half = scalar_tile_half.get_tile_size(scalar_df);
     uint32_t im_tile_size = im_tile.get_tile_size(im_df);
+    uint32_t im_tile_size_half = im_tile_half.get_tile_size(im_df);
     uint32_t stats_tile_size = stats_tile.get_tile_size(stats_df);
 
     uint32_t intermed_output_tiles = (out0_t + 2 * PNHt) * (num_cores_per_batch - 1);
