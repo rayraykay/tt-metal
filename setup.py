@@ -185,18 +185,16 @@ class CMakeBuild(build_ext):
         ]
         tt_metal_patterns = [
             "api/tt-metalium/*.{h,hpp,c,cc,cpp}",
-            "hw/firmware/src/**/*.{h,hpp,c,cc,cpp}",
-            "hw/inc/**/*.{h,hpp,c,cc,cpp}",
-            "hw/ckernels/**/*.{h,hpp,c,cc,cpp}",
-            "hw/toolchain/**/*.{h,hpp,c,cc,cpp,ld,S}",
+            "core_descriptors/*.yaml",
+            "fabric/hw/**/*",
+            "fabric/mesh_graph_descriptors/*.yaml",
             "hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
+            "hw/**/*",
             "impl/dispatch/kernels/**/*.{h,hpp,c,cc,cpp}",
             "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
             "kernels/**/*.{h,hpp,c,cc,cpp}",
             "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
             "tools/profiler/*.{h,hpp,c,cc,cpp}",
-            "core_descriptors/*.yaml",
-            "fabric/mesh_graph_descriptors/*.yaml",
             "soc_descriptors/*.yaml",
         ]
         copy_tree_with_patterns(build_dir / "lib", self.build_lib + "/ttnn/build/lib", lib_patterns)
