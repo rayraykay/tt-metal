@@ -7,7 +7,7 @@ from pathlib import Path
 from loguru import logger
 from importlib.metadata import version
 
-from download_sfpi import download_sfpi
+from .download_sfpi import download_sfpi
 
 
 def write_metal_version_to_file(version_file, metal_version):
