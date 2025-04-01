@@ -3,34 +3,52 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import glob
+import shutil
 import subprocess
 from dataclasses import dataclass
 from functools import partial
 from collections import namedtuple
 
 from pathlib import Path
-from setuptools import setup, Extension, find_namespace_packages
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-import shutil
+
+def expand_patterns(patterns):
+    """
+    Given a list of glob patterns with brace expansion (e.g. `*.{h,hpp}`),
+    return a flat list of glob patterns with the braces expanded.
+    """
+    expanded = []
+
+    for pattern in patterns:
+        if "{" in pattern and "}" in pattern:
+            pre = pattern[: pattern.find("{")]
+            post = pattern[pattern.find("}") + 1 :]
+            options = pattern[pattern.find("{") + 1 : pattern.find("}")].split(",")
+
+            for opt in options:
+                expanded.append(f"{pre}{opt}{post}")
+        else:
+            expanded.append(pattern)
+
+    return expanded
 
 
-def safe_copytree(src, dst):
-    if os.path.exists(dst):
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst)
-
-
-# --- Copy extra files into the package structure ---
-# Copy cpp → ttnn/ttnn/cpp
-cpp_src = os.path.join("ttnn", "cpp", "ttnn")
-cpp_dst = os.path.join("ttnn", "ttnn", "cpp")
-safe_copytree(cpp_src, cpp_dst)
-
-# Copy tt_metal → ttnn/ttnn/tt_metal
-metal_src = "tt_metal"
-metal_dst = os.path.join("ttnn", "ttnn", "tt_metal")
-safe_copytree(metal_src, metal_dst)
+def copy_tree_with_patterns(src_dir, dst_dir, patterns):
+    """Copy only files matching glob patterns from src_dir into dst_dir"""
+    for pattern in expand_patterns(patterns):
+        full_pattern = os.path.join(src_dir, pattern)
+        matched_files = glob.glob(full_pattern, recursive=True)
+        for src_path in matched_files:
+            if os.path.isdir(src_path):
+                continue
+            rel_path = os.path.relpath(src_path, src_dir)
+            dst_path = os.path.join(dst_dir, rel_path)
+            print(f"Squid Copying {src_path} to {dst_path}")
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            shutil.copy2(src_path, dst_path)
 
 
 class EnvVarNotFoundException(Exception):
@@ -152,10 +170,36 @@ class CMakeBuild(build_ext):
         subprocess.check_call(["ls", "-hal", "runtime"], cwd=source_dir, env=build_env)
 
         # Copy needed C++ shared libraries and runtime assets into wheel (sfpi, FW etc)
-        dest_ttnn_build_dir = self.build_lib + "/ttnn/build"
-        os.makedirs(dest_ttnn_build_dir, exist_ok=True)
-        self.copy_tree(build_dir / "lib", dest_ttnn_build_dir + "/lib")
-        self.copy_tree(source_dir / "runtime", self.build_lib + "/runtime")
+        lib_patterns = [
+            "*.so",
+        ]
+        runtime_patterns = [
+            "hw/**/*",
+            "sfpi/include/**/*",
+            "sfpi/compiler/bin/**/*",
+            "sfpi/compiler/lib/**/*",
+            "sfpi/compiler/libexec/**/*",
+            "sfpi/compiler/riscv32-unknown-elf/**/*",
+        ]
+        ttnn_cpp_patterns = [
+            "**/kernels/**/*.{h,hpp,c,cc,cpp}",
+        ]
+        tt_metal_patterns = [
+            "api/tt-metalium/*.{h,hpp,c,cc,cpp}",
+            "hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
+            "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
+            "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
+            "impl/dispatch/kernels/**/*.{h,hpp,c,cc,cpp}",
+            "kernels/**/*.{h,hpp,c,cc,cpp}",
+            "tools/profiler/*.{h,hpp,c,cc,cpp}",
+            "fabric/mesh_graph_descriptors/*.yaml",
+            "core_descriptors/*.yaml",
+            "soc_descriptors/*.yaml",
+        ]
+        copy_tree_with_patterns(build_dir / "lib", self.build_lib + "/ttnn/build/lib", lib_patterns)
+        copy_tree_with_patterns(source_dir / "runtime", self.build_lib + "/ttnn/runtime", runtime_patterns)
+        copy_tree_with_patterns(source_dir / "ttnn/cpp", self.build_lib + "/ttnn/cpp", ttnn_cpp_patterns)
+        copy_tree_with_patterns(source_dir / "tt_metal", self.build_lib + "/ttnn/tt_metal", tt_metal_patterns)
 
         # Encode ARCH_NAME into package for later use so user doesn't have to provide
         arch_name_file = self.build_lib + "/ttnn/.ARCH_NAME"
@@ -175,6 +219,7 @@ class CMakeBuild(build_ext):
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
+        dest_ttnn_build_dir = self.build_lib + "/ttnn/build"
         src = os.path.join(dest_ttnn_build_dir, build_constants_lookup[ext].so_src_location)
         self.copy_file(src, full_lib_path)
         os.remove(src)
@@ -183,7 +228,7 @@ class CMakeBuild(build_ext):
         return self.inplace
 
 
-packages = find_namespace_packages(where="ttnn", exclude=["cpp", "cpp.*, *.cpp"])
+packages = find_packages(where="ttnn")
 
 print(("packaging: ", packages))
 
@@ -199,46 +244,6 @@ build_constants_lookup = {
 }
 
 
-def expand_patterns(patterns):
-    """
-    Given a list of glob patterns with brace expansion (e.g. `*.{h,hpp}`),
-    return a flat list of glob patterns with the braces expanded.
-
-    It does not check if the files exist.
-    """
-    expanded = []
-
-    for pattern in patterns:
-        if "{" in pattern and "}" in pattern:
-            pre = pattern[: pattern.find("{")]
-            post = pattern[pattern.find("}") + 1 :]
-            options = pattern[pattern.find("{") + 1 : pattern.find("}")].split(",")
-
-            for opt in options:
-                expanded.append(f"{pre}{opt}{post}")
-        else:
-            expanded.append(pattern)
-
-    return expanded
-
-
-ttnn_patterns = [
-    "cpp/**/kernels/**/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/api/tt-metalium/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/impl/dispatch/kernels/**/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/kernels/**/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/tools/profiler/*.{h,hpp,c,cc,cpp}",
-    "tt_metal/fabric/mesh_graph_descriptors/*.yaml",
-    "tt_metal/core_descriptors/*.yaml",
-    "tt_metal/soc_descriptors/*.yaml",
-]
-
-ttnn_package_data = expand_patterns(ttnn_patterns)
-
-print(ttnn_package_data)
 setup(
     url="http://www.tenstorrent.com",
     use_scm_version=get_version(metal_build_config),
@@ -246,10 +251,6 @@ setup(
     package_dir={
         "": "ttnn",
     },
-    package_data={
-        "ttnn": ttnn_package_data,
-    },
-    include_package_data=True,
     long_description_content_type="text/markdown",
     ext_modules=ext_modules,
     cmdclass=dict(build_ext=CMakeBuild),
