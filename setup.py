@@ -188,6 +188,7 @@ class CMakeBuild(build_ext):
             "hw/firmware/src/**/*.{h,hpp,c,cc,cpp}",
             "hw/inc/**/*.{h,hpp,c,cc,cpp}",
             "hw/ckernels/**/*.{h,hpp,c,cc,cpp}",
+            "hw/toolchain/**/*.{h,hpp,c,cc,cpp,ld,S}",
             "hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
             "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
             "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
