@@ -46,7 +46,6 @@ def copy_tree_with_patterns(src_dir, dst_dir, patterns):
                 continue
             rel_path = os.path.relpath(src_path, src_dir)
             dst_path = os.path.join(dst_dir, rel_path)
-            print(f"Squid Copying {src_path} to {dst_path}")
             os.makedirs(os.path.dirname(dst_path), exist_ok=True)
             shutil.copy2(src_path, dst_path)
 
