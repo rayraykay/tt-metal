@@ -167,7 +167,7 @@ int main(int argc, char *argv[]) {
         RECORD_STACK_USAGE();
         WAYPOINT("D");
 
-        ASSERT(1 == 2);
+        // ASSERT(1 == 2);
         // Signal completion
         tensix_sync();
         *trisc_run = RUN_SYNC_MSG_DONE;
