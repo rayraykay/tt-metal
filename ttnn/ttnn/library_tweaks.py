@@ -32,13 +32,13 @@ def prepare_dir_as_metal_home(ttnn_package_path, metal_home):
     version_file = metal_home / ".METAL_VERSION"
     current_version = version("ttnn").strip()
 
-    runtime_src = ttnn_package_path.parent / "runtime"
+    runtime_src = ttnn_package_path / "runtime"
     assert (
         runtime_src.is_dir()
     ), f"{runtime_src} seems to not exist as a directory. This should have been packaged during wheel creation"
     runtime_dest = metal_home / "runtime"
 
-    tt_metal_src = ttnn_package_path.parent / "tt_metal"
+    tt_metal_src = ttnn_package_path / "tt_metal"
     tt_metal_dest = metal_home / "tt_metal"
 
     ttnn_src = ttnn_package_path
