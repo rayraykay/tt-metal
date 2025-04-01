@@ -48,13 +48,16 @@ jobs:
 
       - name: Run a test
         id: test
-        timeout-minutes: 15
+        timeout-minutes: 35
         env:
           GTEST_COLOR: yes
           GTEST_OUTPUT: xml:/work/test-reports/
           TT_METAL_HOME: /usr/libexec/tt-metalium # TODO: Need to get away from env vars!
         run: |
-          /usr/libexec/tt-metalium/validation/tt-metalium-validation-smoke
+          for i in $(seq 1 100); do
+            echo "iteration $i"
+            /usr/libexec/tt-metalium/validation/tt-metalium-validation-smoke
+          done
 
       - name: workaround
         run: |

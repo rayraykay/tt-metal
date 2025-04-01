@@ -131,15 +131,15 @@ TEST(DeviceCommandTest, AddDispatchSetWriteOffsets) {
 }
 
 TEST(DeviceCommandTest, AddDispatchTerminate) {
-    int counter = 0;
+    // int counter = 0;
 
-    std::thread t1([&counter] { ++counter; });
-    std::thread t2([&counter] { ++counter; });
+    // std::thread t1([&counter] { ++counter; });
+    // std::thread t2([&counter] { ++counter; });
 
-    t1.join();
-    t2.join();
+    // t1.join();
+    // t2.join();
 
-    std::cout << "Counter: " << counter << std::endl;
+    // std::cout << "Counter: " << counter << std::endl;
 
     DeviceCommandCalculator calculator;
     calculator.add_dispatch_terminate();
