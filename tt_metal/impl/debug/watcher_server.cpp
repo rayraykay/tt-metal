@@ -149,6 +149,10 @@ static void watcher_loop(int sleep_usecs) {
         disabled_features = "None";
     }
     log_info(LogLLRuntime, "Watcher server initialized, disabled features: {}", disabled_features);
+    log_info(
+        LogLLRuntime,
+        "Watcher test mode: {}",
+        tt::llrt::RunTimeOptions::get_instance().get_test_mode_enabled() ? "enabled" : "disabled");
 
     while (true) {
         // Delay the amount of time specified by the user. Don't include watcher polling time to avoid the case where
