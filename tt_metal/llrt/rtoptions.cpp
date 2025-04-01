@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include <cstring>
+#include <iostream>
 #include <string>
 
 using std::vector;
@@ -58,6 +59,8 @@ RunTimeOptions::RunTimeOptions() {
     for (int i = 0; i < RunTimeDebugFeatureCount; i++) {
         ParseFeatureEnv((RunTimeDebugFeatures)i);
     }
+
+    std::cout << "Watcher Test Mode (recap): " << (test_mode_enabled ? "enabled" : "disabled") << std::endl;
 
     profiler_enabled = false;
     profile_dispatch_cores = false;
@@ -210,8 +213,10 @@ void RunTimeOptions::ParseWatcherEnv() {
     const char* watcher_text_start_str = getenv("TT_METAL_WATCHER_TEXT_START");
     watcher_text_start = (watcher_text_start_str != nullptr);
 
+    std::cout << "Checking for Watcher Test Mode..." << std::endl;
     const char* watcher_test_mode = getenv("TT_METAL_WATCHER_TEST_MODE");
     test_mode_enabled = watcher_test_mode && std::strcmp(watcher_test_mode, "0") != 0;
+    std::cout << "Watcher Test Mode: " << (test_mode_enabled ? "enabled" : "disabled") << std::endl;
 
     // Auto unpause is for testing only, no env var.
     watcher_auto_unpause = false;
