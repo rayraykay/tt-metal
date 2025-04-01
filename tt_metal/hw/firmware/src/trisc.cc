@@ -9,6 +9,8 @@
 #include <tensix.h>
 #include "dev_msgs.h"
 
+#include "debug/assert.h"  // Required in all kernels using watcher asserts
+
 #include "tools/profiler/kernel_profiler.hpp"
 
 #include "debug/fw_debug.h"
@@ -165,6 +167,7 @@ int main(int argc, char *argv[]) {
         RECORD_STACK_USAGE();
         WAYPOINT("D");
 
+        ASSERT(1 == 2);
         // Signal completion
         tensix_sync();
         *trisc_run = RUN_SYNC_MSG_DONE;
