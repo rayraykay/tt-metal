@@ -190,13 +190,13 @@ class CMakeBuild(build_ext):
             "hw/ckernels/**/*.{h,hpp,c,cc,cpp}",
             "hw/toolchain/**/*.{h,hpp,c,cc,cpp,ld,S}",
             "hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
-            "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
-            "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
             "impl/dispatch/kernels/**/*.{h,hpp,c,cc,cpp}",
+            "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
             "kernels/**/*.{h,hpp,c,cc,cpp}",
+            "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
             "tools/profiler/*.{h,hpp,c,cc,cpp}",
-            "fabric/mesh_graph_descriptors/*.yaml",
             "core_descriptors/*.yaml",
+            "fabric/mesh_graph_descriptors/*.yaml",
             "soc_descriptors/*.yaml",
         ]
         copy_tree_with_patterns(build_dir / "lib", self.build_lib + "/ttnn/build/lib", lib_patterns)
