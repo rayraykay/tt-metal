@@ -185,6 +185,9 @@ class CMakeBuild(build_ext):
         ]
         tt_metal_patterns = [
             "api/tt-metalium/*.{h,hpp,c,cc,cpp}",
+            "hw/firmware/src/**/*.{h,hpp,c,cc,cpp}",
+            "hw/inc/**/*.{h,hpp,c,cc,cpp}",
+            "hw/ckernels/**/*.{h,hpp,c,cc,cpp}",
             "hostdevcommon/api/hostdevcommon/*.{h,hpp,c,cc,cpp}",
             "include/compute_kernel_api/*.{h,hpp,c,cc,cpp}",
             "third_party/tt_llk/**/*.{h,hpp,c,cc,cpp}",
