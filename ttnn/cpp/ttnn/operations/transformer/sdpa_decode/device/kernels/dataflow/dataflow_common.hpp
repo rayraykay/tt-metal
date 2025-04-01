@@ -275,18 +275,18 @@ void worker_compute(
     cb_wait_front(cb_out_m, PNHt);
     cb_wait_front(cb_out_l, PNHt);
 
-    // Write output chunk to reducer
-    constexpr uint32_t tile_bytes = get_tile_size(cb_out);
-    uint32_t worker_offset = worker_id * (out_chunk_tiles + 2 * PNHt) * tile_bytes;
-    constexpr uint32_t o_write_size = out_chunk_tiles * tile_bytes;
-    constexpr uint32_t ml_write_size = PNHt * tile_bytes;
-    uint64_t output_write_addr =
-        get_noc_addr(reduce_core_noc_x, reduce_core_noc_y, get_write_ptr(cb_intermed_out)) + worker_offset;
-    noc_async_write(get_read_ptr(cb_out), output_write_addr, o_write_size);
-    output_write_addr += o_write_size;
-    noc_async_write(get_read_ptr(cb_out_m), output_write_addr, ml_write_size);
-    output_write_addr += ml_write_size;
-    noc_async_write(get_read_ptr(cb_out_l), output_write_addr, ml_write_size);
+    // // Write output chunk to reducer
+    // constexpr uint32_t tile_bytes = get_tile_size(cb_out);
+    // uint32_t worker_offset = worker_id * (out_chunk_tiles + 2 * PNHt) * tile_bytes;
+    // constexpr uint32_t o_write_size = out_chunk_tiles * tile_bytes;
+    // constexpr uint32_t ml_write_size = PNHt * tile_bytes;
+    // uint64_t output_write_addr =
+    //     get_noc_addr(reduce_core_noc_x, reduce_core_noc_y, get_write_ptr(cb_intermed_out)) + worker_offset;
+    // noc_async_write(get_read_ptr(cb_out), output_write_addr, o_write_size);
+    // output_write_addr += o_write_size;
+    // noc_async_write(get_read_ptr(cb_out_m), output_write_addr, ml_write_size);
+    // output_write_addr += ml_write_size;
+    // noc_async_write(get_read_ptr(cb_out_l), output_write_addr, ml_write_size);
 
     // increment semaphore
     noc_async_write_barrier();

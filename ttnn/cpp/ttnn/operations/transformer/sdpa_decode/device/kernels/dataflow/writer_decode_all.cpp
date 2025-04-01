@@ -119,13 +119,13 @@ void kernel_main() {
     // generate and send scaler to compute
     generate_bcast_unary_scalar(cb_scale_in, scale_val);
     generate_reduce_scaler(cb_identity_scale_in, identity_scalar_packed);
-    if (is_worker) {
-        ASSERT(num_heads_per_core == 1);  // if there are workers, then head must be split across workers so there
-                                          // should not be more than one head per core
-        worker_compute<out_chunk_tiles, cb_out_worker, cb_out_m, cb_out_l, cb_intermed_out, PNHt>(
-            in0_sender_semaphore_noc_addr, worker_id_for_reduce, reduce_core_noc_x, reduce_core_noc_y);
-        return;
-    }
+    // if (is_worker) {
+    //     ASSERT(num_heads_per_core == 1);  // if there are workers, then head must be split across workers so there
+    //                                       // should not be more than one head per core
+    //     worker_compute<out_chunk_tiles, cb_out_worker, cb_out_m, cb_out_l, cb_intermed_out, PNHt>(
+    //         in0_sender_semaphore_noc_addr, worker_id_for_reduce, reduce_core_noc_x, reduce_core_noc_y);
+    //     return;
+    // }
 
     // *** Reducer Compute Below ***
     constexpr uint32_t tile_bytes = get_tile_size(cb_out);
@@ -145,9 +145,9 @@ void kernel_main() {
 
     // generate and send mask to compute if causal
     if constexpr (is_causal) {
-        generate_mask<cb_mask_in, PNHt, Sk_chunk_t>(k_num_chunks, cur_pos);
-        // cb_reserve_back(cb_mask_in, PNHt * Sk_chunk_t);
-        // cb_push_back(cb_mask_in, PNHt * Sk_chunk_t);
+        // generate_mask<cb_mask_in, PNHt, Sk_chunk_t>(k_num_chunks, cur_pos);
+        cb_reserve_back(cb_mask_in, PNHt * Sk_chunk_t);
+        cb_push_back(cb_mask_in, PNHt * Sk_chunk_t);
     }
 
     for (uint32_t cur_head = cur_head_group * num_heads_per_core;
@@ -171,22 +171,22 @@ void kernel_main() {
                 cb_reserve_back(cb_m_in, PNHt);
                 cb_reserve_back(cb_l_in, PNHt);
 
-                uint32_t q_write_ptr = get_read_ptr(cb_out_o);
-                noc_async_read(intermed_l1_read_addr, q_write_ptr, q_read_size);
-                intermed_l1_read_addr += q_read_size;
-                noc_async_read_barrier();
+                // uint32_t q_write_ptr = get_read_ptr(cb_out_o);
+                // noc_async_read(intermed_l1_read_addr, q_write_ptr, q_read_size);
+                // intermed_l1_read_addr += q_read_size;
+                // noc_async_read_barrier();
                 cb_push_back(cb_out_o, out_chunk_tiles);
 
-                uint32_t m_write_ptr = get_read_ptr(cb_m_in);
-                noc_async_read(intermed_l1_read_addr, m_write_ptr, ml_read_size);
-                intermed_l1_read_addr += ml_read_size;
-                noc_async_read_barrier();
+                // uint32_t m_write_ptr = get_read_ptr(cb_m_in);
+                // noc_async_read(intermed_l1_read_addr, m_write_ptr, ml_read_size);
+                // intermed_l1_read_addr += ml_read_size;
+                // noc_async_read_barrier();
                 cb_push_back(cb_m_in, PNHt);
 
-                uint32_t l_write_ptr = get_read_ptr(cb_l_in);
-                noc_async_read(intermed_l1_read_addr, l_write_ptr, ml_read_size);
-                intermed_l1_read_addr += ml_read_size;
-                noc_async_read_barrier();
+                // uint32_t l_write_ptr = get_read_ptr(cb_l_in);
+                // noc_async_read(intermed_l1_read_addr, l_write_ptr, ml_read_size);
+                // intermed_l1_read_addr += ml_read_size;
+                // noc_async_read_barrier();
                 cb_push_back(cb_l_in, PNHt);
             }
         }

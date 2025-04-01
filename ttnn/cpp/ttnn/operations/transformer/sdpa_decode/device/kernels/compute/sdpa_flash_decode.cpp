@@ -119,6 +119,7 @@ void MAIN {
     // Sequence length assignment
     auto [PSt, k_num_chunks, k_chunk_start, k_chunk_end] =
         get_runtime_args(cur_pos, cur_batch, core_num_in_reduce, num_cores_per_head, k_chunk_size);
+
     if (k_chunk_start == k_chunk_end) {
         return;  // early exit because no computes needs to be done
     }
@@ -234,30 +235,32 @@ void MAIN {
                 DPRINT << "13" << ENDL();
             }
 
-            /* cb_cur_sum = 1.0 / cb_cur_sum */
-            cb_push_back(cb_cur_sum, Sq_chunk_t);
+            // /* cb_cur_sum = 1.0 / cb_cur_sum */
+            // cb_push_back(cb_cur_sum, Sq_chunk_t);
 
-            DPRINT << "14" << ENDL();
+            // DPRINT << "14" << ENDL();
 #ifndef SKIP_OP
-            reconfig_data_format(cb_cur_sum, cb_cur_sum);  // DEBUG
-            pack_reconfig_data_format(cb_cur_sum);
-            recip_block_inplace(cb_cur_sum, Sq_chunk_t);
+            // reconfig_data_format(cb_cur_sum, cb_cur_sum);  // DEBUG
+            // pack_reconfig_data_format(cb_cur_sum);
+            // recip_block_inplace(cb_cur_sum, Sq_chunk_t);
 #endif
 
-            DPRINT << "15" << ENDL();
-            /* cb_out_accumulate_im *= cb_cur_sum */
-            reconfig_data_format(cb_out_accumulate_im, cb_cur_sum);  // DEBUG
-            pack_reconfig_data_format(cb_out_accumulate_im);
+            // DPRINT << "15" << ENDL();
+            // /* cb_out_accumulate_im *= cb_cur_sum */
+            // reconfig_data_format(cb_out_accumulate_im, cb_cur_sum);  // DEBUG
+            // pack_reconfig_data_format(cb_out_accumulate_im);
 #ifndef SKIP_OP
-            mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_cur_sum, Sq_chunk_t, DHt);
+            // mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_cur_sum, Sq_chunk_t, DHt);
 #endif
-            DPRINT << "16" << ENDL();
-            pack_reconfig_data_format(cb_out_final);
-            copy_block(cb_out_accumulate_im, cb_out_final, out_chunk_tiles);
+            // DPRINT << "16" << ENDL();
+            // pack_reconfig_data_format(cb_out_final);
+            // copy_block(cb_out_accumulate_im, cb_out_final, out_chunk_tiles);
 
-            // free up cb_prev_max after K chunks
-            cb_pop_front(cb_prev_max, Sq_chunk_t);
-            cb_pop_front(cb_prev_sum, Sq_chunk_t);
+            // // free up cb_prev_max after K chunks
+            // cb_pop_front(cb_prev_max, Sq_chunk_t);
+            // cb_pop_front(cb_prev_sum, Sq_chunk_t);
+            cb_reserve_back(cb_out_final, out_chunk_tiles);
+            cb_push_back(cb_out_final, out_chunk_tiles);
         }
     }
     cb_pop_front(cb_q_in, q_chunk_tiles);

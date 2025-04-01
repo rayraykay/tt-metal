@@ -304,18 +304,18 @@ void copy_block(uint32_t in_cb, uint32_t out_cb, uint32_t num_tiles) {
 
     copy_tile_to_dst_init_short(in_cb);
 
-    cb_wait_front(in_cb, num_tiles);
-    cb_reserve_back(out_cb, num_tiles);
+    // cb_wait_front(in_cb, num_tiles);
+    // cb_reserve_back(out_cb, num_tiles);
 
 #pragma GCC unroll 0
     for (uint32_t i = 0; i < num_tiles; i++) {
         acquire_dst();
         copy_tile(in_cb, i, 0 /*dst*/);
         pack_tile(0, out_cb);
-        cb_push_back(out_cb, 1);
+        // cb_push_back(out_cb, 1);
         release_dst();
     }
-    cb_pop_front(in_cb, num_tiles);
+    // cb_pop_front(in_cb, num_tiles);
 }
 
 ALWI void cb_matmul_blocks1(
@@ -546,156 +546,173 @@ void flash_attention_loop(
     bool apply_mask_at_last_chunk  // for causal mode, optionally apply mask at the last chunk
 ) {
     for (uint32_t k_chunk = k_chunk_start; k_chunk < k_chunk_end; ++k_chunk) {
-        /* QK = Q_CHUNK @ K_CHUNK */
+        // /* QK = Q_CHUNK @ K_CHUNK */
         reconfig_data_format(cb_q_in, cb_k_in);  // DEBUG
         pack_reconfig_data_format(cb_qk_im);
 
-        cb_matmul_blocks1(
-            cb_q_in,
-            cb_k_in,
-            cb_qk_im,
-            Sq_chunk_t,
-            Sk_chunk_t,
-            DHt,
-            qk_num_blocks,
-            qk_in0_num_subblocks,
-            qk_in1_num_subblocks,
-            qk_in0_block_w,
-            qk_subblock_h,
-            qk_subblock_w,
-            true /*transpose*/);
+        // cb_matmul_blocks1(
+        //     cb_q_in,
+        //     cb_k_in,
+        //     cb_qk_im,
+        //     Sq_chunk_t,
+        //     Sk_chunk_t,
+        //     DHt,
+        //     qk_num_blocks,
+        //     qk_in0_num_subblocks,
+        //     qk_in1_num_subblocks,
+        //     qk_in0_block_w,
+        //     qk_subblock_h,
+        //     qk_subblock_w,
+        //     true /*transpose*/);
 
-        /* QK *= SCALE */
-        mul_block_bcast_scalar_inplace(cb_qk_im, cb_scale_in, qk_chunk_tiles);
-        DPRINT << "3" << ENDL();
+        // /* QK *= SCALE */
+        // mul_block_bcast_scalar_inplace(cb_qk_im, cb_scale_in, qk_chunk_tiles);
+        // DPRINT << "3" << ENDL();
 
         if constexpr (is_causal) {
-            // For decode, we only apply mask at the last chunk for causal mode
-            if (k_chunk == k_chunk_end - 1 && apply_mask_at_last_chunk) {
-                /* QK += MASK */
-                reconfig_data_format(cb_qk_im, cb_mask_in);
-                add_block_inplace<false>(cb_qk_im, cb_mask_in, qk_chunk_tiles);
-            }
+            //     // For decode, we only apply mask at the last chunk for causal mode
+            //     if (k_chunk == k_chunk_end - 1 && apply_mask_at_last_chunk) {
+            //         /* QK += MASK */
+            //         reconfig_data_format(cb_qk_im, cb_mask_in);
+            //         add_block_inplace<false>(cb_qk_im, cb_mask_in, qk_chunk_tiles);
+            //     }
         } else {
-            if constexpr (use_attention_mask) {
-                reconfig_data_format(cb_qk_im, cb_mask_in);
-                add_block_inplace<true>(cb_qk_im, cb_mask_in, qk_chunk_tiles);
-            }
+            //     if constexpr (use_attention_mask) {
+            //         reconfig_data_format(cb_qk_im, cb_mask_in);
+            //         add_block_inplace<true>(cb_qk_im, cb_mask_in, qk_chunk_tiles);
+            //     }
         }
 
-        DPRINT << "4" << ENDL();
-        reconfig_data_format(cb_qk_im, cb_identity_scale_in);
-        pack_reconfig_data_format(cb_cur_max);
-        reduce_c<
-            PoolType::MAX,
-            ReduceDim::REDUCE_ROW,
-            cb_qk_im,
-            cb_identity_scale_in,
-            cb_cur_max,
-            Sq_chunk_t,
-            Sk_chunk_t>();
+        // DPRINT << "4" << ENDL();
+        // reconfig_data_format(cb_qk_im, cb_identity_scale_in);
+        // pack_reconfig_data_format(cb_cur_max);
+        // reduce_c<
+        //     PoolType::MAX,
+        //     ReduceDim::REDUCE_ROW,
+        //     cb_qk_im,
+        //     cb_identity_scale_in,
+        //     cb_cur_max,
+        //     Sq_chunk_t,
+        //     Sk_chunk_t>();
 
-        DPRINT << "5" << ENDL();
-        if (k_chunk > k_chunk_start) {
-            reconfig_data_format(cb_cur_max, cb_prev_max);
-            max_block_inplace(cb_cur_max, cb_prev_max, Sq_chunk_t);
-        }
-        DPRINT << "6" << ENDL();
-        /* QK -= cb_cur_max */
-        /* QK = exp(QK)*/
+        // DPRINT << "5" << ENDL();
+        // if (k_chunk > k_chunk_start) {
+        //     reconfig_data_format(cb_cur_max, cb_prev_max);
+        //     max_block_inplace(cb_cur_max, cb_prev_max, Sq_chunk_t);
+        // }
+        // DPRINT << "6" << ENDL();
+        // /* QK -= cb_cur_max */
+        // /* QK = exp(QK)*/
 #ifndef SKIP_OP
-        reconfig_data_format(cb_qk_im, cb_cur_max);
-        pack_reconfig_data_format(cb_qk_im);
-        sub_exp_block_bcast_cols_inplace(cb_qk_im, cb_cur_max, Sq_chunk_t, Sk_chunk_t);
+        // reconfig_data_format(cb_qk_im, cb_cur_max);
+        // pack_reconfig_data_format(cb_qk_im);
+        // sub_exp_block_bcast_cols_inplace(cb_qk_im, cb_cur_max, Sq_chunk_t, Sk_chunk_t);
 #endif
 
-        DPRINT << "7" << ENDL();
-        /* cb_cur_sum = sum(cb_qk_im, dim=-1) */
-        reconfig_data_format(cb_qk_im, cb_identity_scale_in);
-        pack_reconfig_data_format(cb_cur_sum);
-        reduce_c<
-            PoolType::SUM,
-            ReduceDim::REDUCE_ROW,
-            cb_qk_im,
-            cb_identity_scale_in,
-            cb_cur_sum,
-            Sq_chunk_t,
-            Sk_chunk_t>();
-        DPRINT << "8" << ENDL();
+        // DPRINT << "7" << ENDL();
+        // /* cb_cur_sum = sum(cb_qk_im, dim=-1) */
+        // reconfig_data_format(cb_qk_im, cb_identity_scale_in);
+        // pack_reconfig_data_format(cb_cur_sum);
+        // reduce_c<
+        //     PoolType::SUM,
+        //     ReduceDim::REDUCE_ROW,
+        //     cb_qk_im,
+        //     cb_identity_scale_in,
+        //     cb_cur_sum,
+        //     Sq_chunk_t,
+        //     Sk_chunk_t>();
+        // DPRINT << "8" << ENDL();
 
-        /* OUT_IM = QK @ V_CHUNK */
-        reconfig_data_format(cb_qk_im, cb_v_in);  // DEBUG
-        pack_reconfig_data_format(cb_out_im);
-        cb_matmul_blocks2(
-            cb_qk_im,
-            cb_v_in,
-            cb_out_im,
-            Sq_chunk_t,
-            DHt,
-            Sk_chunk_t,
-            out_num_blocks,
-            out_in0_num_subblocks,
-            out_in1_num_subblocks,
-            out_in0_block_w,
-            out_subblock_h,
-            out_subblock_w,
-            false /*transpose*/);
-        reconfig_data_format_srca(cb_out_im);
-        cb_pop_front(cb_qk_im, qk_chunk_tiles);
-        DPRINT << "9" << ENDL();
+        // /* OUT_IM = QK @ V_CHUNK */
+        // reconfig_data_format(cb_qk_im, cb_v_in);  // DEBUG
+        // pack_reconfig_data_format(cb_out_im);
+        // cb_matmul_blocks2(
+        //     cb_qk_im,
+        //     cb_v_in,
+        //     cb_out_im,
+        //     Sq_chunk_t,
+        //     DHt,
+        //     Sk_chunk_t,
+        //     out_num_blocks,
+        //     out_in0_num_subblocks,
+        //     out_in1_num_subblocks,
+        //     out_in0_block_w,
+        //     out_subblock_h,
+        //     out_subblock_w,
+        //     false /*transpose*/);
+        // reconfig_data_format_srca(cb_out_im);
+        // cb_pop_front(cb_qk_im, qk_chunk_tiles);
+        // DPRINT << "9" << ENDL();
 
-        /* OUT_ACC += OUT_IM */
+        // /* OUT_ACC += OUT_IM */
         if (k_chunk == k_chunk_start) {
-            DPRINT << "10a" << ENDL();
-            reconfig_data_format_srca(cb_out_im);
-            pack_reconfig_data_format(cb_out_accumulate_im);
-            copy_block(cb_out_im, cb_out_accumulate_im, out_chunk_tiles);
-            DPRINT << "10a" << ENDL();
+            //     DPRINT << "10a" << ENDL();
+            //     reconfig_data_format_srca(cb_out_im);
+            //     pack_reconfig_data_format(cb_out_accumulate_im);
+            //     copy_block(cb_out_im, cb_out_accumulate_im, out_chunk_tiles);
+            //     DPRINT << "10a" << ENDL();
         } else {
-            DPRINT << "10b" << ENDL();
-            reconfig_data_format(cb_prev_max, cb_cur_max);  // DEBUG
-            pack_reconfig_data_format(cb_exp_max_diff);
-            /* cb_exp_max_diff = torch.exp(cb_prev_max - cb_cur_max) */
-            sub_exp_block(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
-            cb_pop_front(cb_prev_max, Sq_chunk_t);
+            //     DPRINT << "10b" << ENDL();
+            //     reconfig_data_format(cb_prev_max, cb_cur_max);  // DEBUG
+            //     pack_reconfig_data_format(cb_exp_max_diff);
+            //     /* cb_exp_max_diff = torch.exp(cb_prev_max - cb_cur_max) */
+            //     sub_exp_block(cb_prev_max, cb_cur_max, cb_exp_max_diff, Sq_chunk_t);
+            //     cb_pop_front(cb_prev_max, Sq_chunk_t);
 
-            /* cb_prev_sum *= cb_exp_max_diff */
-            mul_block_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t);
+            //     /* cb_prev_sum *= cb_exp_max_diff */
+            //     mul_block_inplace(cb_prev_sum, cb_exp_max_diff, Sq_chunk_t);
 
-            /* cb_out_accumulate_im *= cb_exp_max_diff */
-            reconfig_data_format(cb_out_accumulate_im, cb_exp_max_diff);  // DEBUG
-            pack_reconfig_data_format(cb_out_accumulate_im);
-            mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_exp_max_diff, Sq_chunk_t, DHt);
+            //     /* cb_out_accumulate_im *= cb_exp_max_diff */
+            //     reconfig_data_format(cb_out_accumulate_im, cb_exp_max_diff);  // DEBUG
+            //     pack_reconfig_data_format(cb_out_accumulate_im);
+            //     mul_block_bcast_cols_inplace(cb_out_accumulate_im, cb_exp_max_diff, Sq_chunk_t, DHt);
 
-            /* cb_cur_sum += cb_prev_sum */
-            reconfig_data_format(cb_cur_sum, cb_prev_sum);  // DEBUG
-            pack_reconfig_data_format(cb_cur_sum);
-            add_block_inplace<true>(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
+            //     /* cb_cur_sum += cb_prev_sum */
+            //     reconfig_data_format(cb_cur_sum, cb_prev_sum);  // DEBUG
+            //     pack_reconfig_data_format(cb_cur_sum);
+            //     add_block_inplace<true>(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
 
-            /* cb_out_accumulate_im += cb_out_im */
-            reconfig_data_format(cb_out_accumulate_im, cb_out_im);  // DEBUG
-            pack_reconfig_data_format(cb_out_accumulate_im);
-            add_block_inplace<true>(cb_out_accumulate_im, cb_out_im, out_chunk_tiles);
-            DPRINT << "10b" << ENDL();
+            //     /* cb_out_accumulate_im += cb_out_im */
+            //     reconfig_data_format(cb_out_accumulate_im, cb_out_im);  // DEBUG
+            //     pack_reconfig_data_format(cb_out_accumulate_im);
+            //     add_block_inplace<true>(cb_out_accumulate_im, cb_out_im, out_chunk_tiles);
+            //     DPRINT << "10b" << ENDL();
         }
 
         if (k_chunk < k_chunk_end - 1 || do_reduce) {
-            DPRINT << "11a" << ENDL();
-            // Set cb_prev_sum and cb_prev_max
-            reconfig_data_format(cb_cur_max, cb_cur_max);  // DEBUG
-            pack_reconfig_data_format(cb_prev_max);
-            copy_block(cb_cur_max, cb_prev_max, Sq_chunk_t);
-            copy_block(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
-            DPRINT << "11a" << ENDL();
+            //     DPRINT << "11a" << ENDL();
+            //     // Set cb_prev_sum and cb_prev_max
+            //     reconfig_data_format(cb_cur_max, cb_cur_max);  // DEBUG
+            //     pack_reconfig_data_format(cb_prev_max);
+            //     copy_block(cb_cur_max, cb_prev_max, Sq_chunk_t);
+            //     copy_block(cb_cur_sum, cb_prev_sum, Sq_chunk_t);
+            //     DPRINT << "11a" << ENDL();
 
         } else {
-            DPRINT << "11b" << ENDL();
-            // Write o, m, l into cb_out
-            copy_block(cb_out_accumulate_im, cb_out_o, out_chunk_tiles);
-            copy_block(cb_cur_max, cb_out_m, Sq_chunk_t);
-            copy_block(cb_cur_sum, cb_out_l, Sq_chunk_t);
-            DPRINT << "11b" << ENDL();
+            //     DPRINT << "11b" << ENDL();
+            //     // Write o, m, l into cb_out
+            //     copy_block(cb_out_accumulate_im, cb_out_o, out_chunk_tiles);
+            //     copy_block(cb_cur_max, cb_out_m, Sq_chunk_t);
+            //     copy_block(cb_cur_sum, cb_out_l, Sq_chunk_t);
+            //     DPRINT << "11b" << ENDL();
         }
+
+        cb_wait_front(cb_k_in, Sk_chunk_t * DHt);
+        cb_pop_front(cb_k_in, Sk_chunk_t * DHt);
+        cb_wait_front(cb_v_in, Sk_chunk_t * DHt);
+        cb_pop_front(cb_v_in, Sk_chunk_t * DHt);
+
+        cb_reserve_back(cb_out_accumulate_im, out_chunk_tiles);
+        cb_push_back(cb_out_accumulate_im, out_chunk_tiles);
+
+        cb_reserve_back(cb_out_o, out_chunk_tiles);
+        cb_push_back(cb_out_o, out_chunk_tiles);
+
+        cb_reserve_back(cb_out_m, Sq_chunk_t);
+        cb_push_back(cb_out_m, out_chunk_tiles);
+
+        cb_reserve_back(cb_out_l, Sq_chunk_t);
+        cb_push_back(cb_out_l, out_chunk_tiles);
     }
     DPRINT << "DONE F" << ENDL();
 }
