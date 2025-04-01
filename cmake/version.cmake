@@ -87,6 +87,11 @@ function(ParseGitDescribe)
         string(APPEND VERSION_FULL "+m")
         string(APPEND VERSION_DEB "+m")
     endif()
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
+    if(NOT CMAKE_BUILD_TYPE_LOWER STREQUAL "release")
+        string(APPEND VERSION_FULL "-${CMAKE_BUILD_TYPE_LOWER}")
+        string(APPEND VERSION_DEB "~${CMAKE_BUILD_TYPE_LOWER}")
+    endif()
 
     message(STATUS "Version: ${VERSION_FULL}")
 
