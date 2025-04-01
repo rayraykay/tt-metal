@@ -59,9 +59,6 @@ RunTimeOptions::RunTimeOptions() {
         ParseFeatureEnv((RunTimeDebugFeatures)i);
     }
 
-    // Test mode has no env var, default is disabled
-    test_mode_enabled = false;
-
     profiler_enabled = false;
     profile_dispatch_cores = false;
     profiler_sync_enabled = false;
@@ -212,6 +209,9 @@ void RunTimeOptions::ParseWatcherEnv() {
 
     const char* watcher_text_start_str = getenv("TT_METAL_WATCHER_TEXT_START");
     watcher_text_start = (watcher_text_start_str != nullptr);
+
+    const char* watcher_test_mode = getenv("TT_METAL_WATCHER_TEST_MODE");
+    test_mode_enabled = watcher_test_mode && std::strcmp(watcher_test_mode, "0") != 0;
 
     // Auto unpause is for testing only, no env var.
     watcher_auto_unpause = false;

@@ -54,8 +54,7 @@ jobs:
           GTEST_OUTPUT: xml:/work/test-reports/
           TT_METAL_HOME: /usr/libexec/tt-metalium # TODO: Need to get away from env vars!
           TT_METAL_WATCHER: 10
-          TT_METAL_WATCHER_APPEND: 1
-          TT_METAL_WATCHER_NOINLINE: 1
+          TT_METAL_WATCHER_TEST_MODE: 1
         run: |
           for i in $(seq 1 10); do
             echo "iteration $i"
