@@ -603,8 +603,8 @@ void WatcherDeviceReader::DumpAssertStatus(CoreDescriptor& core, const string& c
                 assert_status->line_num,
                 GetKernelName(core, launch_msg, assert_status->which).c_str(),
                 line_num_warning.c_str());
-            log_warning("Watcher stopped the device due to tripped assert, see watcher log for more details");
-            log_warning(error_msg.c_str());
+            log_error("Watcher stopped the device due to tripped assert, see watcher log for more details");
+            log_error(error_msg.c_str());
             DumpWaypoints(core, mbox_data, true);
             DumpRingBuffer(core, mbox_data, true);
             LogRunningKernels(core, launch_msg);

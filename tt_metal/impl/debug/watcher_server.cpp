@@ -16,6 +16,7 @@
 #include <dev_msgs.h>
 #include "llrt.hpp"
 #include <rtoptions.hpp>
+#include <tt-metalium/logger.hpp>
 #include "debug/ring_buffer.h"
 #include "watcher_device_reader.hpp"
 #include "debug_helpers.hpp"
@@ -187,11 +188,14 @@ static void watcher_loop(int sleep_usecs) {
                 dump(logfile);
             } catch (std::runtime_error& e) {
                 // Depending on whether test mode is enabled, catch and stop server, or re-throw.
+                log_warning(LogLLRuntime, "Watcher server caught exception: {}.", e.what());
                 if (tt::llrt::RunTimeOptions::get_instance().get_test_mode_enabled()) {
                     watcher::watcher_killed_due_to_error = true;
                     watcher::enabled = false;
+                    log_warning(LogLLRuntime, "Watcher test mode is enabled; breaking out of loop.");
                     break;
                 } else {
+                    log_warning(LogLLRuntime, "Watcher test mode is NOT enabled; re-throwing exception.");
                     throw e;
                 }
             }
