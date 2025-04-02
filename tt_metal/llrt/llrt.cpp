@@ -14,6 +14,7 @@
 #include <mutex>
 #include <thread>
 #include <unistd.h>
+#include <tt-metalium/logger.hpp>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -24,6 +25,8 @@
 #include "llrt.hpp"
 #include <rtoptions.hpp>
 #include "llrt/hal.hpp"
+
+#include "impl/debug/watcher_server.hpp"
 
 #include <jit_build_options.hpp>
 
@@ -269,6 +272,10 @@ void wait_until_cores_done(
         if (llrt::RunTimeOptions::get_instance().get_watcher_enabled() ||
             llrt::RunTimeOptions::get_instance().get_feature_enabled(tt::llrt::RunTimeDebugFeatureDprint))
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        if (llrt::RunTimeOptions::get_instance().get_test_mode_enabled() && watcher_server_killed_due_to_error()) {
+            TT_THROW("Device {}: Watcher server killed due to error.  Core might be hung.", device_id);
+        }
     }
 }
 
