@@ -186,7 +186,7 @@ class CMakeBuild(build_ext):
             "hostdevcommon/api/hostdevcommon/**/*",
             "hw/**/*",
             "impl/dispatch/kernels/**/*",
-            "include/compute_kernel_api/**/*",
+            "include/**/*",
             "kernels/**/*",
             "third_party/tt_llk/**/*",
             "tools/profiler/*",
