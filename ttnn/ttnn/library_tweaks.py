@@ -75,7 +75,7 @@ def prepare_dir_as_metal_home(ttnn_package_path, metal_home):
     if not ttnn_dest.exists():
         ttnn_dest.symlink_to(ttnn_src)
 
-    sfpi_json_path = ttnn_package_path / "ttnn" / "build" / "lib" / "sfpi-version.json"
+    sfpi_json_path = ttnn_package_path / "build" / "lib" / "sfpi-version.json"
     runtime_sfpi_dest = metal_home / "runtime"
     download_sfpi(sfpi_json_path, runtime_sfpi_dest)
 
