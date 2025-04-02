@@ -1,6 +1,7 @@
 ---
 # Clang Analyzer is disabled as we may prefer to run a dedicated scan with a report
 # TODO: Evaluate the other checks
+# Hello
 Checks: >
   *,
   -abseil-string-find-startswith,
