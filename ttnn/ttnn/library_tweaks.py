@@ -66,6 +66,7 @@ def prepare_dir_as_metal_home(ttnn_package_path, metal_home):
     write_metal_version_to_file(version_file, current_version)
 
     if not runtime_dest.exists():
+        runtime_dest.parent.mkdir(parents=True, exist_ok=True)  # mkdir runtime
         runtime_dest.symlink_to(runtime_src)
 
     if not tt_metal_dest.exists():
