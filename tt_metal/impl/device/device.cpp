@@ -1101,6 +1101,7 @@ bool Device::close() {
     this->sysmem_manager_.reset();
     this->initialized_ = false;
 
+    log_info(tt::LogMetal, "Finished closing device {}", this->id_);
     return true;
 }
 
