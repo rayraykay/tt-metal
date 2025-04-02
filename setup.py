@@ -176,6 +176,7 @@ class CMakeBuild(build_ext):
             "hw/**/*",
         ]
         ttnn_cpp_patterns = [
+            "ttnn/deprecated/**/*",
             "ttnn/operations/**/*",
         ]
         tt_metal_patterns = [
