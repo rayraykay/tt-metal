@@ -176,7 +176,7 @@ class CMakeBuild(build_ext):
             "hw/**/*",
         ]
         ttnn_cpp_patterns = [
-            "ttnn/operations/**/*,
+            "ttnn/operations/**/*",
         ]
         tt_metal_patterns = [
             "api/tt-metalium/**/*",
