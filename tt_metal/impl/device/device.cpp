@@ -1026,6 +1026,7 @@ bool Device::close() {
         TT_THROW("Cannot close device {} that has not been initialized!", this->id_);
     }
 
+    log_info(tt::LogMetal, "Mark 1");
     for (const auto& hw_command_queue : command_queues_) {
         if (hw_command_queue->sysmem_manager().get_bypass_mode()) {
             hw_command_queue->record_end();
@@ -1033,24 +1034,30 @@ bool Device::close() {
         hw_command_queue->terminate();
     }
 
+    log_info(tt::LogMetal, "Mark 2");
     this->work_executor_->reset();
     tt_metal::detail::DumpDeviceProfileResults(this, ProfilerDumpState::LAST_CLOSE_DEVICE);
 
+    log_info(tt::LogMetal, "Mark 3");
     sub_device_manager_tracker_.reset(nullptr);
 
     std::unordered_map<chip_id_t, std::unordered_set<CoreCoord>> not_done_dispatch_cores;
     std::unordered_map<chip_id_t, std::unordered_set<CoreCoord>> cores_to_skip;
     this->get_associated_dispatch_virtual_cores(not_done_dispatch_cores, cores_to_skip);
 
+    log_info(tt::LogMetal, "Mark 4");
     auto mmio_device_id = tt::Cluster::instance().get_associated_mmio_device(this->id_);
     std::unordered_set<CoreCoord> wait_for_cores = not_done_dispatch_cores[mmio_device_id];
 
+    log_info(tt::LogMetal, "Mark 5");
     llrt::internal_::wait_until_cores_done(mmio_device_id, RUN_MSG_GO, wait_for_cores);
 
+    log_info(tt::LogMetal, "Mark 6");
     DprintServerDetach(this->id());
     watcher_detach(this->id());
 
     // Assert worker cores
+    log_info(tt::LogMetal, "Mark 7");
     CoreCoord grid_size = this->logical_grid_size();
     for (uint32_t y = 0; y < grid_size.y; y++) {
         for (uint32_t x = 0; x < grid_size.x; x++) {
@@ -1067,6 +1074,7 @@ bool Device::close() {
         }
     }
 
+    log_info(tt::LogMetal, "Mark 8");
     if (!hal_ref.get_eth_fw_is_cooperative()) {
         for (const auto& eth_core : this->get_active_ethernet_cores()) {
             CoreCoord virtual_eth_core = this->ethernet_core_from_logical_core(eth_core);
@@ -1078,6 +1086,7 @@ bool Device::close() {
         }
     }
 
+    log_info(tt::LogMetal, "Mark 9");
     if (this->id_ != mmio_device_id) {
         for (auto it = not_done_dispatch_cores[mmio_device_id].begin(); it != not_done_dispatch_cores[mmio_device_id].end(); it++) {
             const auto &virtual_core = *it;
@@ -1090,6 +1099,7 @@ bool Device::close() {
         }
     }
 
+    log_info(tt::LogMetal, "Mark 10");
     tt::Cluster::instance().l1_barrier(id_);
 
     this->compute_cores_.clear();
