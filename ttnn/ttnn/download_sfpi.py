@@ -8,6 +8,7 @@ import json
 import hashlib
 import urllib.request
 import tarfile
+from loguru import logger
 
 
 def download_sfpi(sfpi_json_path, sfpi_target_dir):
@@ -16,9 +17,11 @@ def download_sfpi(sfpi_json_path, sfpi_target_dir):
         with open(sfpi_json_path, "r") as f:
             sfpi_releases = json.load(f)
     except FileNotFoundError:
-        sys.exit(f"SFPI version JSON not found: {sfpi_json_path}")
+        logger.error(f"SFPI version JSON not found: {sfpi_json_path}")
+        sys.exit(1)
     except json.JSONDecodeError:
-        sys.exit(f"Invalid JSON in: {sfpi_json_path}")
+        logger.error(f"Invalid JSON in: {sfpi_json_path}")
+        sys.exit(1)
 
     # Detect host key
     arch = os.uname().machine
@@ -26,7 +29,8 @@ def download_sfpi(sfpi_json_path, sfpi_target_dir):
     key = f"{arch}_{os_name}"
 
     if key not in sfpi_releases:
-        sys.exit(f"SFPI binaries for {key} not available")
+        logger.error(f"SFPI binaries for {key} not available")
+        sys.exit(1)
 
     sfpi_file, expected_md5 = sfpi_releases[key]
     version_tag, filename = sfpi_file.split("/")
@@ -37,7 +41,7 @@ def download_sfpi(sfpi_json_path, sfpi_target_dir):
 
     os.makedirs(sfpi_target_dir, exist_ok=True)
 
-    print(f"Downloading {url} to {download_path}")
+    logger.info(f"Downloading {url} to {download_path}")
     urllib.request.urlretrieve(url, download_path)
 
     # Verify MD5
@@ -46,13 +50,14 @@ def download_sfpi(sfpi_json_path, sfpi_target_dir):
         actual_md5 = hashlib.md5(file_data).hexdigest()
 
     if actual_md5 != expected_md5:
-        sys.exit(f"MD5 mismatch: expected {expected_md5}, got {actual_md5}")
+        logger.error(f"MD5 mismatch: expected {expected_md5}, got {actual_md5}")
+        sys.exit(1)
 
-    print(f"Extracting {download_path} to {sfpi_target_dir}")
+    logger.info(f"Extracting {download_path} to {sfpi_target_dir}")
     with tarfile.open(download_path, "r:gz") as tar:
         tar.extractall(path=sfpi_target_dir)
 
-    print(f"SFPI downloaded and extracted to {sfpi_target_dir}")
+    logger.info(f"SFPI downloaded and extracted to {sfpi_target_dir}")
 
 
 def main():
