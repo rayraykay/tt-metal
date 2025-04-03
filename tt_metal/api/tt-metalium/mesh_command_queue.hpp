@@ -100,7 +100,7 @@ private:
     // Captures dispatch commands associated with running a program on a Virtual Mesh subgrid
     // inside the appropriate trace staging vector (corresponding to the specified subgrid)
     void capture_program_trace_on_subgrid(
-        const MeshCoordinateRange& sub_grid,
+        const MeshCoordinateRangeSet& sub_grid,
         ProgramCommandSequence& program_cmd_seq,
         bool stall_first,
         bool stall_before_program);
@@ -110,7 +110,7 @@ private:
     // When running trace, the dispatch commands responsible for forwarding go signals must be
     // captured on these subgrids.
     void capture_go_signal_trace_on_unused_subgrids(
-        const MeshCoordinateRange& active_sub_grid,
+        const MeshCoordinateRangeSet& active_sub_grid,
         const SubDeviceId& sub_device_id,
         uint32_t expected_num_workers_completed,
         bool mcast_go_signals,
