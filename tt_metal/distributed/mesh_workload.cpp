@@ -61,21 +61,23 @@ void MeshWorkload::add_program(const MeshCoordinateRange& range, Program&& progr
 void MeshWorkload::add_program(const MeshCoordinateRangeSet& range_set, Program&& program) {
     TT_FATAL(!range_set.empty(), "Cannot enqueue a program for an empty range set.");
     if (programs_.empty()) {
+        // Optimize for the common case of a single range set.
         programs_.emplace(range_set, std::move(program));
     } else {
-        auto add_to_program_coords = [this](const MeshCoordinateRangeSet& range_set) {
+        auto validate_unique_coords = [this](const MeshCoordinateRangeSet& range_set) {
             for (const auto& coord : range_set.coords()) {
                 TT_FATAL(program_coords_.insert(coord).second, "Found 2 programs for coordinate {}", coord);
             }
         };
+
         // `program_coords_` is empty until at least 2 programs were added.
         if (program_coords_.empty()) {
-            for (const auto& [range_set, _] : programs_) {
-                add_to_program_coords(range_set);
-            }
+            TT_ASSERT(programs_.size() == 1);
+            validate_unique_coords(programs_.begin()->first);
         }
 
-        add_to_program_coords(range_set);
+        validate_unique_coords(range_set);
+        programs_.emplace(range_set, std::move(program));
     }
 }
 

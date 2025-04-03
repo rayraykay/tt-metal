@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include <gmock/gmock.h>
+
 #include <tt-metalium/distributed.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/tt_metal.hpp>
@@ -16,6 +18,22 @@ namespace {
 
 using MeshEventsTestT3000 = T3000MultiCQMeshDeviceFixture;
 using MeshEventsTestSuite = GenericMultiCQMeshDeviceFixture;
+
+using ::testing::HasSubstr;
+
+TEST_F(MeshEventsTestSuite, EmptyRangeSet) {
+    EXPECT_THAT(
+        ([&]() {
+            EnqueueRecordEventToHost(
+                mesh_device_->mesh_command_queue(0), /*sub_device_ids=*/{}, MeshCoordinateRangeSet());
+        }),
+        ThrowsMessage<std::runtime_error>(HasSubstr("If provided, device_range_set must be non-empty.")));
+    EXPECT_THAT(
+        ([&]() {
+            EnqueueRecordEvent(mesh_device_->mesh_command_queue(0), /*sub_device_ids=*/{}, MeshCoordinateRangeSet());
+        }),
+        ThrowsMessage<std::runtime_error>(HasSubstr("If provided, device_range_set must be non-empty.")));
+}
 
 TEST_F(MeshEventsTestSuite, ReplicatedAsyncIO) {
     uint32_t NUM_TILES = 1000;

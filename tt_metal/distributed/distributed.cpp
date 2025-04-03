@@ -15,8 +15,17 @@ namespace tt::tt_metal::distributed {
 
 MeshWorkload CreateMeshWorkload() { return MeshWorkload(); }
 
+void AddProgramToMeshWorkload(MeshWorkload& mesh_workload, Program&& program, const MeshCoordinate& coord) {
+    mesh_workload.add_program(coord, std::move(program));
+}
+
 void AddProgramToMeshWorkload(MeshWorkload& mesh_workload, Program&& program, const MeshCoordinateRange& device_range) {
     mesh_workload.add_program(device_range, std::move(program));
+}
+
+void AddProgramToMeshWorkload(
+    MeshWorkload& mesh_workload, Program&& program, const MeshCoordinateRangeSet& device_range_set) {
+    mesh_workload.add_program(device_range_set, std::move(program));
 }
 
 void EnqueueMeshWorkload(MeshCommandQueue& mesh_cq, MeshWorkload& mesh_workload, bool blocking) {
@@ -43,11 +52,9 @@ MeshEvent EnqueueRecordEventToHost(
 void EnqueueWaitForEvent(MeshCommandQueue& mesh_cq, const MeshEvent& event) { mesh_cq.enqueue_wait_for_event(event); }
 
 void EventSynchronize(const MeshEvent& event) {
-    for (const auto& range : event.device_range_set().ranges()) {
-        for (const auto& coord : range) {
-            auto physical_device = event.device()->get_device(coord);
-            while (physical_device->sysmem_manager().get_last_completed_event(event.mesh_cq_id()) < event.id());
-        }
+    for (const auto& coord : event.device_range_set().coords()) {
+        auto physical_device = event.device()->get_device(coord);
+        while (physical_device->sysmem_manager().get_last_completed_event(event.mesh_cq_id()) < event.id());
     }
 }
 

@@ -647,11 +647,17 @@ MeshEvent MeshCommandQueue::enqueue_record_event_helper(
 
 MeshEvent MeshCommandQueue::enqueue_record_event(
     tt::stl::Span<const SubDeviceId> sub_device_ids, const std::optional<MeshCoordinateRangeSet>& device_range_set) {
+    TT_FATAL(
+        !device_range_set.has_value() || !device_range_set->empty(),
+        "If provided, device_range_set must be non-empty.");
     return this->enqueue_record_event_helper(sub_device_ids, /*notify_host=*/false, device_range_set);
 }
 
 MeshEvent MeshCommandQueue::enqueue_record_event_to_host(
     tt::stl::Span<const SubDeviceId> sub_device_ids, const std::optional<MeshCoordinateRangeSet>& device_range_set) {
+    TT_FATAL(
+        !device_range_set.has_value() || !device_range_set->empty(),
+        "If provided, device_range_set must be non-empty.");
     auto event = this->enqueue_record_event_helper(sub_device_ids, /*notify_host=*/true, device_range_set);
     completion_queue_reads_.push(std::make_shared<MeshCompletionReaderVariant>(
         std::in_place_type<MeshReadEventDescriptor>, ReadEventDescriptor(event.id()), event.device_range_set()));

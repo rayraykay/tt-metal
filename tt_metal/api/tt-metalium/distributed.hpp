@@ -37,7 +37,10 @@ namespace distributed {
 
 MeshWorkload CreateMeshWorkload();
 
+void AddProgramToMeshWorkload(MeshWorkload& mesh_workload, Program&& program, const MeshCoordinate& coord);
 void AddProgramToMeshWorkload(MeshWorkload& mesh_workload, Program&& program, const MeshCoordinateRange& device_range);
+void AddProgramToMeshWorkload(
+    MeshWorkload& mesh_workload, Program&& program, const MeshCoordinateRangeSet& device_range_set);
 
 void EnqueueMeshWorkload(MeshCommandQueue& mesh_cq, MeshWorkload& mesh_workload, bool blocking);
 

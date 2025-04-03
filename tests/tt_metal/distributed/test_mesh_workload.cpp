@@ -167,6 +167,18 @@ TEST_F(MeshWorkloadTestSuite, MeshWorkloadOnActiveEthAsserts) {
     EXPECT_THROW(EnqueueMeshWorkload(mesh_device_->mesh_command_queue(), *workload, false), std::exception);
 }
 
+TEST_F(MeshWorkloadTestSuite, EmptyRangeSet) {
+    MeshWorkload workload;
+
+    auto programs = tt::tt_metal::distributed::test::utils::create_random_programs(
+        /*num_programs=*/1, mesh_device_->compute_with_storage_grid_size(), /*seed=*/0);
+    auto mesh_workload = CreateMeshWorkload();
+
+    EXPECT_THAT(
+        ([&]() { AddProgramToMeshWorkload(mesh_workload, std::move(*programs[0]), MeshCoordinateRangeSet()); }),
+        ThrowsMessage<std::runtime_error>(HasSubstr("Cannot enqueue a program for an empty range set.")));
+}
+
 TEST_F(MeshWorkloadTestSuite, OverlappingProgramRanges) {
     MeshWorkload workload;
 
@@ -181,7 +193,7 @@ TEST_F(MeshWorkloadTestSuite, OverlappingProgramRanges) {
     AddProgramToMeshWorkload(mesh_workload, std::move(*programs[0]), devices_range);
     EXPECT_THAT(
         ([&]() { AddProgramToMeshWorkload(mesh_workload, std::move(*programs[1]), devices_range); }),
-        ThrowsMessage<std::runtime_error>(HasSubstr("overlaps with the previously added range")));
+        ThrowsMessage<std::runtime_error>(HasSubstr("Found 2 programs for coordinate MeshCoordinate([0, 0])")));
 }
 
 // Test running different configurations of heterogenous MeshWorkloads on T3000.
