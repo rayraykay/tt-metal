@@ -207,9 +207,10 @@ jobs:
 
       - name: Create ccache tmpdir
         run: |
-          ccache -p
 
           mkdir -p /tmp/ccache
+
+          ccache -p
 
           ls -al /tmp
           ls -al /tmp/ccache
