@@ -44,7 +44,7 @@ concurrency:
 jobs:
   secrets-test:
     runs-on: ubuntu-latest
-    environment: afuller-test-main
+    environment: ${{ github.ref == 'afuller/fake-main' && 'afuller-test-main' || '' }}
     steps:
       - name: get secret
         run: |
