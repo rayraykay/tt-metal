@@ -166,17 +166,17 @@ jobs:
           # So we have to do it this way
           echo "CCACHE_READONLY=1" >> "$GITHUB_ENV"
 
-      - name: Verify ccache availability
-        shell: bash
-        run: |
-          if [ ! -d "/mnt/MLPerf/ccache" ]; then
-            echo "::error title=ccache-mlperf-not-mounted::NFS drive is not mounted; build machine not properly provisioned."
-            exit 1
-          fi
-          if [ ! -d "$HOME/.ccache" ]; then
-            echo "::error title=ccache-not-provisioned::Ccache is not properly provisioned."
-            exit 1
-          fi
+      # - name: Verify ccache availability
+      #   shell: bash
+      #   run: |
+      #     if [ ! -d "/mnt/MLPerf/ccache" ]; then
+      #       echo "::error title=ccache-mlperf-not-mounted::NFS drive is not mounted; build machine not properly provisioned."
+      #       exit 1
+      #     fi
+      #     if [ ! -d "$HOME/.ccache" ]; then
+      #       echo "::error title=ccache-not-provisioned::Ccache is not properly provisioned."
+      #       exit 1
+      #     fi
 
       - name: Set artifact name
         id: set-artifact-name
@@ -257,7 +257,7 @@ jobs:
         run: |
           echo '## CCache Summary' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          ccache -s >> $GITHUB_STEP_SUMMARY
+          ccache -s -v >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: ☁️ Upload packages
