@@ -199,7 +199,8 @@ Result conv_transpose2d(
             kernel_size,
             groups,
             bias_tensor.has_value(),
-            compute_config);
+            compute_config,
+            false);
         auto_shard = true;
     }
 
@@ -214,7 +215,8 @@ Result conv_transpose2d(
         in_channels,
         out_channels,
         mm_conv,
-        auto_shard);
+        auto_shard,
+        false);
 
     uint32_t round_up_size = tt::constants::TILE_HEIGHT;
 
