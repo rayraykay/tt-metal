@@ -209,6 +209,7 @@ jobs:
         run: |
 
           mkdir -p /tmp/ccache
+          chmod 777 /tmp/ccache
 
           ccache -p
 
