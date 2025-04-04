@@ -211,6 +211,9 @@ jobs:
 
           mkdir -p /tmp/ccache
 
+          ls -al /tmp
+          ls -al /tmp/ccache
+
       - name: Prepare ccache summary
         run: |
           # Zero out the stats so we can see how we did this build
