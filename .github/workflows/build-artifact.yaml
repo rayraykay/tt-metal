@@ -267,6 +267,7 @@ jobs:
           ccache -s -v >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+          ls -al /tmp/ccache/
           cat /tmp/ccache/ccache.log
 
       - name: ☁️ Upload packages
