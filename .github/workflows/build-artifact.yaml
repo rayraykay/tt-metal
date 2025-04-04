@@ -126,7 +126,7 @@ jobs:
     needs: build-docker-image
     timeout-minutes: 30
     runs-on: tt-beta-ubuntu-2204-xlarge
-    environment: ${{ github.ref == 'refs/heads/afuller/main' && 'mainline' || '' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
     outputs:
       packages-artifact-name: ${{ steps.set-artifact-name.outputs.name }}
       build_artifact_name: ${{ steps.set_build_artifact_name.outputs.build_artifact_name }}
@@ -157,6 +157,15 @@ jobs:
         working-directory: /work # https://github.com/actions/runner/issues/878
 
     steps:
+      - name: Detect ccache rw ability
+        # FIXME: Can we detect the environment we're in so are always in sync with the `environment: ...` line above
+        if: ${{ github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          # ccache does not support false env vars; and GHA does not support conditionally defining an envvar.
+          # So we have to do it this way
+          echo "CCACHE_READONLY=1" >> "$GITHUB_ENV"
+
       - name: Verify ccache availability
         shell: bash
         run: |
