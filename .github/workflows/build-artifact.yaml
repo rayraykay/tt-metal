@@ -211,10 +211,12 @@ jobs:
           mkdir -p /tmp/ccache
           chmod 777 /tmp/ccache
 
+          ccache --version
           ccache -p
 
           ls -al /tmp
           ls -al /tmp/ccache
+          ls -al /github/home/.ccache
 
       - name: Prepare ccache summary
         run: |
@@ -268,6 +270,7 @@ jobs:
           ccache -s -v >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+          ls /github/home/.ccache
           ls -al /tmp/ccache/
           cat /tmp/ccache/ccache.log
 
