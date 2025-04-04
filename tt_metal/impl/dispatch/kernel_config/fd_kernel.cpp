@@ -25,6 +25,7 @@
 #include "mux.hpp"
 #include "prefetch.hpp"
 #include "rtoptions.hpp"
+#include "impl/context/metal_context.hpp"
 #include "tt_cluster.hpp"
 #include <umd/device/tt_core_coordinates.h>
 
@@ -140,7 +141,7 @@ void FDKernel::configure_kernel_variant(
     if (rt_options.watcher_dispatch_disabled()) {
         defines["FORCE_WATCHER_OFF"] = "1";
     }
-    if (tt::Cluster::instance().get_fabric_config() == FabricConfig::FABRIC_2D) {
+    if (tt::tt_metal::MetalContext::instance().get_cluster().get_fabric_config() == FabricConfig::FABRIC_2D) {
         defines["FVC_MODE_PULL"] = "1";
     }
     if (!DPrintServerReadsDispatchCores(device_->id())) {
