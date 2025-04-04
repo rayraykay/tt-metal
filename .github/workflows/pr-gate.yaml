@@ -48,7 +48,7 @@ jobs:
     steps:
       - name: get secret
         run: |
-          url = ${{ secrets.MY_URL }}
+          url = "${{ secrets.MY_URL }}"
           echo "URL: $url"
           echo "trivial munge:"
           echo "$url" | sed 's/./& /g'
