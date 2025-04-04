@@ -125,9 +125,8 @@ jobs:
     name: "🛠️ Build ${{ inputs.build-type }} ${{ inputs.distro }} ${{ inputs.version }}"
     needs: build-docker-image
     timeout-minutes: 30
-    runs-on:
-      - build
-      - in-service
+    runs-on: tt-beta-ubuntu-2204-xlarge
+    environment: ${{ github.ref == 'refs/heads/afuller/main' && 'mainline' || '' }}
     outputs:
       packages-artifact-name: ${{ steps.set-artifact-name.outputs.name }}
       build_artifact_name: ${{ steps.set_build_artifact_name.outputs.build_artifact_name }}
@@ -135,6 +134,8 @@ jobs:
     container:
       image: ${{ needs.build-docker-image.outputs.dev-tag || 'docker-image-unresolved!'}}
       env:
+        CCACHE_REMOTE_STORAGE: "redis://${{ secrets.REDIS_PASSWORD }}@${{ secrets.REDIS_HOST }}:${{ secrets.REDIS_PORT }}"
+        CCACHE_REMOTE_ONLY: "true"
         CCACHE_TEMPDIR: /tmp/ccache
         CARGO_HOME: /tmp/.cargo
         TT_FROM_PRECOMPILED_DIR: /work
