@@ -134,7 +134,7 @@ jobs:
     container:
       image: ${{ needs.build-docker-image.outputs.dev-tag || 'docker-image-unresolved!'}}
       env:
-        CCACHE_REMOTE_STORAGE: "redis://${{ env.REDIS_USER}}:${{ secrets.REDIS_PASSWORD }}@${{ env.REDIS_HOST }}:${{ env.REDIS_PORT }}"
+        CCACHE_REMOTE_STORAGE: "redis://${{ vars.REDIS_USER }}:${{ secrets.REDIS_PASSWORD }}@${{ vars.REDIS_HOST }}:${{ vars.REDIS_PORT }}"
         CCACHE_REMOTE_ONLY: "true"
         CCACHE_TEMPDIR: /tmp/ccache
         CCACHE_LOGFILE: /tmp/ccache/ccache.log
