@@ -126,7 +126,7 @@ jobs:
     needs: build-docker-image
     timeout-minutes: 30
     runs-on: tt-beta-ubuntu-2204-xlarge
-    environment: ${{ github.ref == 'refs/heads/main' && 'mainline' || '' }}
+    environment: ${{ github.ref == 'refs/heads/afuller/fake-main' && 'mainline' || '' }}
     outputs:
       packages-artifact-name: ${{ steps.set-artifact-name.outputs.name }}
       build_artifact_name: ${{ steps.set_build_artifact_name.outputs.build_artifact_name }}
