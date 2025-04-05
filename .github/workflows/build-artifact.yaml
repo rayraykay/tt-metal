@@ -160,7 +160,7 @@ jobs:
     steps:
       - name: Detect ccache rw ability
         # FIXME: Can we detect the environment we're in so are always in sync with the `environment: ...` line above
-        if: ${{ github.ref != 'refs/heads/main' }}
+        if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/afuller/fake-main' }}
         shell: bash
         run: |
           # ccache does not support false env vars; and GHA does not support conditionally defining an envvar.
