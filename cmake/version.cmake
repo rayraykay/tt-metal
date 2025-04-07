@@ -88,6 +88,15 @@ function(ParseGitDescribe)
         string(APPEND VERSION_DEB "+m")
     endif()
 
+    # Include Ubuntu's codename to disambiguate packages
+    execute_process(
+        COMMAND
+            lsb_release -sc
+        OUTPUT_VARIABLE UBUNTU_CODENAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string(APPEND VERSION_DEB "~${UBUNTU_CODENAME}")
+
     message(STATUS "Version: ${VERSION_FULL}")
 
     # Output variables
