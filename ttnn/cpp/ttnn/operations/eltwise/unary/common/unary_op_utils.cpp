@@ -65,8 +65,6 @@ std::string get_macro_definition(UnaryOpType op_type) {
         case UnaryOpType::FMOD: return "SFPU_OP_FMOD_INCLUDE";
         case UnaryOpType::FILL: return "SFPU_OP_FILL_INCLUDE";
         case UnaryOpType::ROUND: return "SFPU_OP_ROUND_INCLUDE";
-        case UnaryOpType::EQZ:
-        case UnaryOpType::UNARY_NE: return "SFPU_OP_COMP_INT_INCLUDE";
         default: return "SFPU_OP_COMPUTE_KERNEL_API_INCLUDE";
     };
 }
