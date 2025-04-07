@@ -15,7 +15,6 @@
 // Fabric and Client interface ring buffer indices
 // The ring buffer size must be a power of 2
 static uint32_t fabric_header_rb_index = 0;
-static uint32_t fabric_client_interface_rb_index = 0;
 constexpr uint32_t k_WrapBoundary = 31;  // Fabric atomic inc
 
 // The command queue read interface controls reads from the issue region, host owns the issue region write interface
@@ -130,6 +129,18 @@ enum CQNocSend {
 
 constexpr bool use_fabric(bool is_h_variant, bool is_d_variant, uint64_t fabric_router_xy) {
     return !(is_h_variant && is_d_variant) && fabric_router_xy != 0;
+}
+
+template <uint32_t interface_rb_base, uint32_t interface_rb_entries, uint32_t interface_size>
+inline volatile tt::tt_fabric::fabric_pull_client_interface_t* get_fabric_interface() {
+    static_assert(((interface_rb_entries) & ((interface_rb_entries)-1)) == 0);
+    constexpr uint32_t rb_mask = interface_rb_entries - 1;
+
+    static uint32_t fabric_client_interface_rb_index = 0;
+
+    uint32_t addr = interface_rb_base + ((fabric_client_interface_rb_index & rb_mask) * interface_size);
+    fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
+    return reinterpret_cast<volatile tt::tt_fabric::fabric_pull_client_interface_t*>(addr);
 }
 
 template <

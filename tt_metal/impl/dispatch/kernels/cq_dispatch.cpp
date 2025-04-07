@@ -121,13 +121,6 @@ inline uint32_t get_fabric_header() {
     return addr;
 }
 
-inline volatile tt::tt_fabric::fabric_pull_client_interface_t* get_fabric_interface() {
-    constexpr uint32_t rb_mask = client_interface_rb_entries - 1;
-    uint32_t addr = client_interface_addr + ((fabric_client_interface_rb_index & rb_mask) * client_interface_size);
-    fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
-    return reinterpret_cast<volatile tt::tt_fabric::fabric_pull_client_interface_t*>(addr);
-}
-
 constexpr uint32_t packed_write_max_multicast_sub_cmds =
     get_packed_write_max_multicast_sub_cmds(packed_write_max_unicast_sub_cmds);
 constexpr uint32_t max_write_packed_large_cmd =
@@ -247,7 +240,10 @@ void process_write_host_h(uint32_t& block_noc_writes_to_clear, uint32_t block_ne
                     upstream_dispatch_cb_sem_id,
                     dispatch_cb_pages_per_block,
                     dispatch_cb_blocks,
-                    true>(get_fabric_interface(), block_noc_writes_to_clear, rd_block_idx);
+                    true>(
+                    get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+                    block_noc_writes_to_clear,
+                    rd_block_idx);
             }
             // Wait for dispatcher to supply a page (this won't go beyond the buffer end)
             uint32_t n_pages = cb_acquire_pages<my_dispatch_cb_sem_id, dispatch_cb_log_page_size>(
@@ -393,7 +389,10 @@ void relay_to_next_cb(
                             downstream_dev_id,
                             fabric_router_noc_xy,
                             tt::tt_fabric::ClientDataMode::RAW_DATA>(
-                            get_fabric_interface(),
+                            get_fabric_interface<
+                                client_interface_addr,
+                                client_interface_rb_entries,
+                                client_interface_size>(),
                             get_fabric_header(),
                             data_ptr,
                             get_noc_addr_helper(downstream_noc_xy, downstream_cb_data_ptr),
@@ -441,7 +440,7 @@ void relay_to_next_cb(
             downstream_dev_id,
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
-            get_fabric_interface(),
+            get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
             get_fabric_header(),
             data_ptr,
             get_noc_addr_helper(downstream_noc_xy, downstream_cb_data_ptr),
@@ -455,7 +454,10 @@ void relay_to_next_cb(
             fabric_router_noc_xy,
             my_noc_index,
             downstream_noc_xy,
-            downstream_cb_sem_id>(get_fabric_interface(), get_fabric_header(), 1);
+            downstream_cb_sem_id>(
+            get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+            get_fabric_header(),
+            1);
 
         length -= xfer_size;
         data_ptr += xfer_size;
@@ -556,7 +558,13 @@ void process_write_linear(
                         upstream_dispatch_cb_sem_id,
                         dispatch_cb_pages_per_block,
                         dispatch_cb_blocks,
-                        true>(get_fabric_interface(), block_noc_writes_to_clear, rd_block_idx);
+                        true>(
+                        get_fabric_interface<
+                            client_interface_addr,
+                            client_interface_rb_entries,
+                            client_interface_size>(),
+                        block_noc_writes_to_clear,
+                        rd_block_idx);
                     // Need to reinit state if fabric was used
                     init_state();
                 }
@@ -1347,7 +1355,9 @@ void kernel_main() {
     if constexpr (use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
         DPRINT << "dispatch_" << is_h_variant << is_d_variant << ": start (fabric)" << ENDL();
         for (uint32_t i = 0; i < client_interface_rb_entries; ++i) {
-            tt::tt_fabric::fabric_endpoint_init(get_fabric_interface(), 0 /*unused*/);
+            tt::tt_fabric::fabric_endpoint_init(
+                get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+                0 /*unused*/);
         }
     } else {
         DPRINT << "dispatch_" << is_h_variant << is_d_variant << ": start" << ENDL();
@@ -1436,7 +1446,7 @@ void kernel_main() {
                     upstream_dispatch_cb_sem_id,
                     dispatch_cb_pages_per_block,
                     true>(
-                    get_fabric_interface(),
+                    get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
                     cmd_ptr,
                     cb_fence,
                     block_noc_writes_to_clear,
@@ -1484,7 +1494,10 @@ void kernel_main() {
         fabric_router_noc_xy,
         upstream_noc_index,
         upstream_noc_xy,
-        upstream_dispatch_cb_sem_id>(get_fabric_interface(), get_fabric_header(), block_noc_writes_to_clear);
+        upstream_dispatch_cb_sem_id>(
+        get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+        get_fabric_header(),
+        block_noc_writes_to_clear);
 
     // Release any held pages from the current block
     uint32_t npages =
@@ -1497,7 +1510,10 @@ void kernel_main() {
         fabric_router_noc_xy,
         upstream_noc_index,
         upstream_noc_xy,
-        upstream_dispatch_cb_sem_id>(get_fabric_interface(), get_fabric_header(), npages);
+        upstream_dispatch_cb_sem_id>(
+        get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+        get_fabric_header(),
+        npages);
 
     // Confirm expected number of pages, spinning here is a leak
     cb_wait_all_pages<my_dispatch_cb_sem_id>(upstream_total_acquired_page_count);
