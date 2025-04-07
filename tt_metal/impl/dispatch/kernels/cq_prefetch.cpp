@@ -188,7 +188,7 @@ inline uint32_t get_fabric_header() {
 inline volatile tt::tt_fabric::fabric_pull_client_interface_t* get_fabric_interface() {
     constexpr uint32_t rb_mask = client_interface_rb_entries - 1;
     uint32_t addr = client_interface_addr + ((fabric_client_interface_rb_index & rb_mask) * client_interface_size);
-    // fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
+    fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
     return reinterpret_cast<volatile tt::tt_fabric::fabric_pull_client_interface_t*>(addr);
 }
 
@@ -1308,6 +1308,8 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
     uint32_t downstream_pages_left = (downstream_cb_end - downstream_data_ptr) >> downstream_cb_log_page_size;
     if (downstream_pages_left >= npages) {
         relay_cb_async_write<
+            is_h_variant,
+            is_d_variant,
             downstream_mesh_id,
             downstream_dev_id,
             fabric_router_noc_xy,
@@ -1323,6 +1325,8 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
         uint32_t available = downstream_pages_left * downstream_cb_page_size;
         if (available > 0) {
             relay_cb_async_write<
+                is_h_variant,
+                is_d_variant,
                 downstream_mesh_id,
                 downstream_dev_id,
                 fabric_router_noc_xy,
@@ -1336,6 +1340,8 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
             length -= available;
         }
         relay_cb_async_write<
+            is_h_variant,
+            is_d_variant,
             downstream_mesh_id,
             downstream_dev_id,
             fabric_router_noc_xy,
@@ -1349,11 +1355,13 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
     }
 
     // Raw data writes are already flushed
-    if constexpr (!use_fabric(fabric_router_noc_xy)) {
+    if constexpr (!use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
         noc_async_writes_flushed();
     }
 
     relay_cb_release_pages<
+        is_h_variant,
+        is_d_variant,
         downstream_mesh_id,
         downstream_dev_id,
         fabric_router_noc_xy,
@@ -1472,6 +1480,8 @@ void kernel_main_d() {
         uint32_t total_length = length + sizeof(CQPrefetchHToPrefetchDHeader);
         uint32_t pages_to_free = (total_length + cmddat_q_page_size - 1) >> cmddat_q_log_page_size;
         relay_cb_release_pages<
+            is_h_variant,
+            is_d_variant,
             upstream_mesh_id,
             upstream_dev_id,
             fabric_router_noc_xy,
@@ -1488,7 +1498,7 @@ void kernel_main_d() {
     // TODO: This should be replaced with a signal similar to what packetized
     // components use.
     // DPRINT << "prefetch_d done" << ENDL();
-    if (!use_fabric(fabric_router_noc_xy)) {
+    if (!use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
         noc_semaphore_inc(
             get_noc_addr_helper(upstream_noc_xy, get_semaphore<fd_core_type>(upstream_cb_sem_id)), 0x80000000);
     }
@@ -1517,7 +1527,7 @@ void kernel_main_hd() {
 }
 
 void kernel_main() {
-    if constexpr (use_fabric(fabric_router_noc_xy)) {
+    if constexpr (use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
         DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": start (fabric)" << ENDL();
         for (uint32_t i = 0; i < client_interface_rb_entries; ++i) {
             tt::tt_fabric::fabric_endpoint_init(get_fabric_interface(), 0 /*unused*/);
