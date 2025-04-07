@@ -185,13 +185,6 @@ inline uint32_t get_fabric_header() {
     return addr;
 }
 
-inline volatile tt::tt_fabric::fabric_pull_client_interface_t* get_fabric_interface() {
-    constexpr uint32_t rb_mask = client_interface_rb_entries - 1;
-    uint32_t addr = client_interface_addr + ((fabric_client_interface_rb_index & rb_mask) * client_interface_size);
-    fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
-    return reinterpret_cast<volatile tt::tt_fabric::fabric_pull_client_interface_t*>(addr);
-}
-
 // Feature to stall the prefetcher, mainly for ExecBuf impl which reuses CmdDataQ
 static enum StallState { STALL_NEXT = 2, STALLED = 1, NOT_STALLED = 0 } stall_state = NOT_STALLED;
 
@@ -1339,7 +1332,7 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
             downstream_dev_id,
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
-            get_fabric_interface(),
+            get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
             get_fabric_header(),
             data_ptr,
             get_noc_addr_helper(downstream_noc_xy, downstream_data_ptr),
@@ -1356,7 +1349,7 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
                 downstream_dev_id,
                 fabric_router_noc_xy,
                 tt::tt_fabric::ClientDataMode::RAW_DATA>(
-                get_fabric_interface(),
+                get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
                 get_fabric_header(),
                 data_ptr,
                 get_noc_addr_helper(downstream_noc_xy, downstream_data_ptr),
@@ -1371,7 +1364,7 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
             downstream_dev_id,
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
-            get_fabric_interface(),
+            get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
             get_fabric_header(),
             data_ptr,
             get_noc_addr_helper(downstream_noc_xy, downstream_cb_base),
@@ -1392,7 +1385,10 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
         fabric_router_noc_xy,
         my_noc_index,
         downstream_noc_xy,
-        downstream_cb_sem_id>(get_fabric_interface(), get_fabric_header(), npages);
+        downstream_cb_sem_id>(
+        get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+        get_fabric_header(),
+        npages);
 
     return fence;
 }
@@ -1512,7 +1508,10 @@ void kernel_main_d() {
             fabric_router_noc_xy,
             my_noc_index,
             upstream_noc_xy,
-            upstream_cb_sem_id>(get_fabric_interface(), get_fabric_header(), pages_to_free);
+            upstream_cb_sem_id>(
+            get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+            get_fabric_header(),
+            pages_to_free);
 
         // Move to next page
         cmd_ptr = round_up_pow2(cmd_ptr, cmddat_q_page_size);
@@ -1555,7 +1554,9 @@ void kernel_main() {
     if constexpr (use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
         DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": start (fabric)" << ENDL();
         for (uint32_t i = 0; i < client_interface_rb_entries; ++i) {
-            tt::tt_fabric::fabric_endpoint_init(get_fabric_interface(), 0 /*unused*/);
+            tt::tt_fabric::fabric_endpoint_init(
+                get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>(),
+                0 /*unused*/);
         }
     } else {
         DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": start" << ENDL();
