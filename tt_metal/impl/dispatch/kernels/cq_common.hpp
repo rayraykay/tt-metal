@@ -16,6 +16,7 @@
 // The ring buffer size must be a power of 2
 static uint32_t fabric_header_rb_index = 0;
 static uint32_t fabric_client_interface_rb_index = 0;
+constexpr uint32_t k_WrapBoundary = 31;  // Fabric atomic inc
 
 // The command queue read interface controls reads from the issue region, host owns the issue region write interface
 // Commands and data to send to device are pushed into the issue region
@@ -127,7 +128,9 @@ enum CQNocSend {
     CQ_NOC_SEND = 1,
 };
 
-constexpr bool use_fabric(uint64_t fabric_router_xy) { return fabric_router_xy != 0; }
+constexpr bool use_fabric(bool is_h_variant, bool is_d_variant, uint64_t fabric_router_xy) {
+    return !(is_h_variant && is_d_variant) && fabric_router_xy != 0;
+}
 
 template <
     enum CQNocFlags flags,
@@ -350,8 +353,17 @@ cb_acquire_pages(uint32_t cb_fence, uint32_t block_next_start_addr[], uint32_t r
     return usable;
 }
 
-template <uint8_t noc_idx, uint32_t noc_xy, uint32_t sem_id, uint32_t cb_pages_per_block>
-FORCE_INLINE void cb_block_release_pages(uint32_t& block_noc_writes_to_clear) {
+template <
+    uint16_t mesh_id,
+    uint16_t dev_id,
+    uint32_t routing,
+    uint8_t noc_idx,
+    uint32_t noc_xy,
+    uint32_t sem_id,
+    uint32_t cb_pages_per_block,
+    bool sem_is_remote,
+    typename T>
+FORCE_INLINE void cb_block_release_pages(T client_interface, uint32_t& block_noc_writes_to_clear) {
     // Do not release pages on the first call to this function
     // This is because the first call means we don't have a previous block to release
     static bool prev_block = false;
@@ -359,7 +371,21 @@ FORCE_INLINE void cb_block_release_pages(uint32_t& block_noc_writes_to_clear) {
         WAYPOINT("CBRW");
         uint32_t sem_addr = get_semaphore<fd_core_type>(sem_id);
         while (!wrap_ge(NOC_STATUS_READ_REG(noc_index, NIU_MST_NONPOSTED_WR_REQ_SENT), block_noc_writes_to_clear));
-        noc_semaphore_inc(get_noc_addr_helper(noc_xy, sem_addr), cb_pages_per_block, noc_idx);
+
+        if constexpr (sem_is_remote) {
+            tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
+            tt::tt_fabric::fabric_atomic_inc(
+                client_interface,
+                routing,
+                (uint32_t)&client_interface->header_buffer[0],
+                mesh_id,
+                dev_id,
+                get_noc_addr_helper(noc_xy, sem_addr),
+                cb_pages_per_block,
+                k_WrapBoundary);
+        } else {
+            noc_semaphore_inc(get_noc_addr_helper(noc_xy, sem_addr), cb_pages_per_block, noc_idx);
+        }
         WAYPOINT("CBRD");
     } else {
         prev_block = true;
@@ -374,27 +400,47 @@ FORCE_INLINE void move_rd_to_next_block(uint32_t& rd_block_idx) {
     rd_block_idx &= cb_blocks - 1;
 }
 
-template <uint8_t noc_idx, uint32_t noc_xy, uint32_t sem_id, uint32_t cb_pages_per_block, uint32_t cb_blocks>
-FORCE_INLINE void move_rd_to_next_block_and_release_pages(uint32_t& block_noc_writes_to_clear, uint32_t& rd_block_idx) {
-    cb_block_release_pages<noc_idx, noc_xy, sem_id, cb_pages_per_block>(block_noc_writes_to_clear);
+template <
+    uint16_t mesh_id,
+    uint16_t dev_id,
+    uint32_t routing,
+    uint8_t noc_idx,
+    uint32_t noc_xy,
+    uint32_t sem_id,
+    uint32_t cb_pages_per_block,
+    uint32_t cb_blocks,
+    bool sem_is_remote,
+    typename T>
+FORCE_INLINE void move_rd_to_next_block_and_release_pages(
+    T client_interface, uint32_t& block_noc_writes_to_clear, uint32_t& rd_block_idx) {
+    cb_block_release_pages<mesh_id, dev_id, routing, noc_idx, noc_xy, sem_id, cb_pages_per_block, sem_is_remote>(
+        client_interface, block_noc_writes_to_clear);
     move_rd_to_next_block<cb_blocks>(rd_block_idx);
 }
 
-template <uint16_t mesh_id, uint16_t dev_id, uint32_t routing, tt::tt_fabric::ClientDataMode data_mode, typename T>
+template <
+    bool is_h_variant,
+    bool is_d_variant,
+    uint16_t mesh_id,
+    uint16_t dev_id,
+    uint32_t routing,
+    tt::tt_fabric::ClientDataMode data_mode,
+    typename T>
 inline void relay_cb_async_write(
     T client_interface, uint32_t header_addr, uint32_t src_addr, uint64_t dst_addr, uint32_t size) {
-    if constexpr (use_fabric(routing)) {
+    if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
         size += tt::tt_fabric::PACKET_HEADER_SIZE_BYTES;
         tt::tt_fabric::fabric_async_write<decltype(client_interface), data_mode>(
             client_interface, routing, src_addr, mesh_id, dev_id, dst_addr, size, 0);
-        tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
     } else {
         noc_async_write(src_addr, dst_addr, size);
     }
 }
 
 template <
+    bool is_h_variant,
+    bool is_d_variant,
     uint16_t mesh_id,
     uint16_t dev_id,
     uint32_t routing,
@@ -403,8 +449,7 @@ template <
     uint32_t sem_id,
     typename T>
 inline void relay_cb_release_pages(T client_interface, uint32_t header, uint32_t n) {
-    constexpr uint32_t k_WrapBoundary = 31;  // Same as NOC API
-    if constexpr (use_fabric(routing)) {
+    if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
         header = (uint32_t)&client_interface->header_buffer[0];  // remove
         tt::tt_fabric::fabric_atomic_inc(
@@ -416,34 +461,15 @@ inline void relay_cb_release_pages(T client_interface, uint32_t header, uint32_t
             get_noc_addr_helper(noc_xy, get_semaphore<fd_core_type>(sem_id)),
             n,
             k_WrapBoundary);
-        tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
     } else {
         cb_release_pages<noc_idx, noc_xy, sem_id>(n);
     }
 }
 
 template <
-    uint8_t noc_idx,
-    uint32_t noc_xy,
-    uint32_t sem_id,
-    uint32_t cb_pages_per_block,
-    uint32_t cb_blocks,
     uint16_t mesh_id,
     uint16_t dev_id,
     uint32_t routing,
-    typename T>
-FORCE_INLINE void relay_cb_move_rd_to_next_block_and_release_pages(
-    T client_interface, uint32_t header, uint32_t& block_noc_writes_to_clear, uint32_t& rd_block_idx) {
-    if constexpr (use_fabric(routing)) {
-        relay_cb_release_pages<mesh_id, dev_id, routing, noc_idx, noc_xy, sem_id>(
-            client_interface, header, block_noc_writes_to_clear);
-    } else {
-        cb_block_release_pages<noc_idx, noc_xy, sem_id, cb_pages_per_block>(block_noc_writes_to_clear);
-    }
-    move_rd_to_next_block<cb_blocks>(rd_block_idx);
-}
-
-template <
     uint32_t cb_base,
     uint32_t cb_blocks,
     uint32_t cb_log_page_size,
@@ -451,8 +477,11 @@ template <
     uint8_t upstream_noc_idx,
     uint32_t upstream_noc_xy,
     uint32_t upstream_cb_sem,
-    uint32_t cb_pages_per_block>
+    uint32_t cb_pages_per_block,
+    bool upstream_is_remote,
+    typename T>
 FORCE_INLINE uint32_t get_cb_page_and_release_pages(
+    T client_interface,
     uint32_t& cmd_ptr,
     uint32_t& cb_fence,
     uint32_t& block_noc_writes_to_clear,
@@ -466,11 +495,15 @@ FORCE_INLINE uint32_t get_cb_page_and_release_pages(
             cb_fence = cb_base;
         }
         move_rd_to_next_block_and_release_pages<
+            mesh_id,
+            dev_id,
+            routing,
             upstream_noc_idx,
             upstream_noc_xy,
             upstream_cb_sem,
             cb_pages_per_block,
-            cb_blocks>(block_noc_writes_to_clear, rd_block_idx);
+            cb_blocks,
+            upstream_is_remote>(client_interface, block_noc_writes_to_clear, rd_block_idx);
     }
 
     // Wait for dispatcher to supply a page
