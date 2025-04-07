@@ -461,6 +461,7 @@ inline void relay_cb_release_pages(T client_interface, uint32_t header, uint32_t
             get_noc_addr_helper(noc_xy, get_semaphore<fd_core_type>(sem_id)),
             n,
             k_WrapBoundary);
+        tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);  // Why is this needed?
     } else {
         cb_release_pages<noc_idx, noc_xy, sem_id>(n);
     }
