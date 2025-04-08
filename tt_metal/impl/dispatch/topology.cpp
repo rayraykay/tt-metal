@@ -984,6 +984,8 @@ std::unique_ptr<Program> create_and_compile_2d_fabric_program(IDevice* device, F
         auto [mesh_id, chip_id] = control_plane->get_mesh_chip_id_from_physical_chip_id(device->id());
         uint32_t direction = router_chan.second;
         router_compile_args[5] = direction;
+        std::cout << " setting up kernel for " << device->id() << " channel " << router_chan.first << " is master "
+                  << uint32_t(router_compile_args[4]) << " " << router_compile_args[5] << std::endl;
         auto kernel = tt_metal::CreateKernel(
             *fabric_program_ptr,
             "tt_metal/fabric/impl/kernels/tt_fabric_router.cpp",

@@ -97,6 +97,7 @@ void __attribute__((noinline)) Application(void) {
     ncrisc_noc_full_sync();
     WAYPOINT("REW");
     uint32_t count = 0;
+    DPRINT << " ERISC START " << ENDL();
     while (routing_info->routing_enabled != 1) {
         volatile uint32_t *ptr = (volatile uint32_t *)0xffb2010c;
         count++;
@@ -104,12 +105,14 @@ void __attribute__((noinline)) Application(void) {
         internal_::risc_context_switch();
     }
     WAYPOINT("RED");
+    DPRINT << " ERISC STARTGIN " << ENDL();
 
     mailboxes->launch_msg_rd_ptr = 0; // Initialize the rdptr to 0
     while (routing_info->routing_enabled) {
         // FD: assume that no more host -> remote writes are pending
         uint8_t go_message_signal = mailboxes->go_message.signal;
         if (go_message_signal == RUN_MSG_GO) {
+            DPRINT << " GOT RUN MSG GO " << ENDL();
             // Only include this iteration in the device profile if the launch message is valid. This is because all workers get a go signal regardless of whether
             // they're running a kernel or not. We don't want to profile "invalid" iterations.
             DeviceZoneScopedMainN("ERISC-FW");

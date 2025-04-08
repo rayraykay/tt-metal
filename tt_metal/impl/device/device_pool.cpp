@@ -554,8 +554,6 @@ void DevicePool::wait_for_fabric_router_sync() const {
                     4,
                     master_router_status,
                     CoreType::ETH);
-                std::cout << master_router_status[0] << std::endl;
-                sleep(2);
             }
         }
     }
