@@ -909,7 +909,7 @@ void Device::clear_l1_state() {
     }
 
     // These L1 ranges are restricted becase UMD base routing FW uses L1 below FIRMWARE_BASE and
-    // between TILE_HEADER_BUFFER_BASE to COMMAND_Q_BASE
+    // between SW_MANAGED_L1_BASE to ROUTING_CQ_BASE
     // Clear erisc sync info
     for (const auto& eth_core : this->get_active_ethernet_cores()) {
         static const uint32_t max_l1_loading_size =
@@ -919,8 +919,8 @@ void Device::clear_l1_state() {
         auto zero_vec_addr = HalL1MemAddrType::UNRESERVED;
         if (hal_ref.get_eth_fw_is_cooperative()) {
             zero_vec_size -=
-                hal_ref.get_dev_addr(HalProgrammableCoreType::ACTIVE_ETH, HalL1MemAddrType::TILE_HEADER_BUFFER);
-            zero_vec_addr = HalL1MemAddrType::TILE_HEADER_BUFFER;
+                hal_ref.get_dev_addr(HalProgrammableCoreType::ACTIVE_ETH, HalL1MemAddrType::SW_MANAGED_L1_BASE);
+            zero_vec_addr = HalL1MemAddrType::SW_MANAGED_L1_BASE;
         }
 
         static std::vector<uint32_t> zero_vec(zero_vec_size / sizeof(uint32_t), 0);
