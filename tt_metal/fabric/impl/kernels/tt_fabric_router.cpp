@@ -45,6 +45,7 @@ volatile tt_l1_ptr fabric_router_l1_config_t* routing_table =
 #define SWITCH_THRESHOLD 0x3FFF
 
 void kernel_main() {
+    DPRINT << " KERNEL STARTED" << ENDL();
     tt_fabric_init();
 #ifdef FVC_MODE_PULL
     fvc_inbound_pull_state_t fvc_inbound_state;
@@ -114,18 +115,22 @@ void kernel_main() {
         return;
     }
 
+    DPRINT << " GOT HERE " << ENDL();
     if constexpr (is_master) {
         // wait for all device routers to have incremented the sync semaphore.
         // sync_val is equal to number of tt-fabric routers running on a device.
+        DPRINT << "      MASTER " << master_router_chan << " " << sync_val << ENDL();
         wait_for_notification(FABRIC_ROUTER_SYNC_SEM, sync_val - 1);
         notify_slave_routers(router_mask, master_router_chan, FABRIC_ROUTER_SYNC_SEM, sync_val);
         // increment the sync sem to signal host that handshake is complete
         *((volatile uint32_t*)FABRIC_ROUTER_SYNC_SEM) += 1;
     } else {
+        DPRINT << "      NOT MASTER " << master_router_chan << " " << sync_val << ENDL();
         notify_master_router(master_router_chan, FABRIC_ROUTER_SYNC_SEM);
         // wait for the signal from the master router
         wait_for_notification(FABRIC_ROUTER_SYNC_SEM, sync_val);
     }
+    DPRINT << " DONE SYNC " << ENDL();
 
 #ifndef FVC_MODE_PULL
     fvc_inbound_state.register_with_routers<FVC_MODE_ROUTER>(routing_table->my_device_id);

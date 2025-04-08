@@ -1099,10 +1099,12 @@ void Device::init_fabric() {
             msg->kernel_config.host_assigned_id = fabric_program_->get_runtime_id();
 
             auto physical_core = this->virtual_core_from_logical_core(logical_core, core_type);
+            std::cout << " writing to device " << this->id() << " core " << physical_core.str() << std::endl;
             tt::llrt::write_launch_msg_to_core(
                 this->id(), physical_core, msg, go_msg, this->get_dev_addr(physical_core, HalL1MemAddrType::LAUNCH));
         }
     }
+    std::cout << " done writing to device " << this->id() << std::endl;
 }
 
 bool Device::initialize(const uint8_t num_hw_cqs, size_t l1_small_size, size_t trace_region_size, tt::stl::Span<const std::uint32_t> l1_bank_remap, bool minimal) {
