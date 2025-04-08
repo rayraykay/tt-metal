@@ -97,7 +97,7 @@ const core_descriptor_t& get_core_descriptor_config(
         TT_THROW("One row harvested Grayskull is not supported");
     }
 
-    std::string product_name = get_product_name(arch, num_harvested_rows);
+    std::string product_name = get_product_name(arch, num_harvested_on_axis);
     if (tt::tt_metal::MetalContext::instance().get_cluster().is_galaxy_cluster()) {
         if (tt::tt_metal::MetalContext::instance().get_cluster().get_board_type(device_id) == BoardType::N150) {
             // some Galaxy machines are setup with N150s that have 0 harvested rows.

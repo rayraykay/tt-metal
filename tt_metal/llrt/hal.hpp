@@ -16,10 +16,12 @@
 #include <functional>
 #include <memory>
 #include <type_traits>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
 enum class CoreType;
+enum class AddressableCoreType : uint8_t;
 
 namespace tt {
 

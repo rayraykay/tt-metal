@@ -70,7 +70,7 @@ TEST(SOC, TensixValidateLogicalToPhysicalCoreCoordHostMapping) {
             tt::tt_metal::MetalContext::instance().get_cluster().get_soc_desc(device_id);
         log_info(LogTest, "Device {} harvesting mask {}", device_id, harvested_rows_mask);
         std::unordered_set<int> harvested_rows = unit_tests::basic::soc_desc::get_harvested_rows(device_id);
-        auto tensix_harvest_axis = hal.get_tensix_harvest_axis();
+        auto tensix_harvest_axis = hal_ref.get_tensix_harvest_axis();
 
         CoreCoord logical_grid_size = device->logical_grid_size();
         for (int x = 0; x < logical_grid_size.x; x++) {
