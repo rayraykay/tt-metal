@@ -671,12 +671,12 @@ std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weights_biases
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override) {
-    // Check if this can be done on device
+    const bool parameters_on_device) {
     ttnn::Tensor weight_tensor_ = weight_tensor;  // tensor to return
-    if (weight_shape_override.has_value()) {
-        weight_tensor_ = ttnn::reshape(weight_tensor_, weight_shape_override.value());
+    Shape weight_shape = weight_tensor.get_logical_shape();
+    // In case of 1D convolution and 3D weight tensor, reinterpret it as 4D tensor
+    if (weight_shape.rank() == 3 && input_width == 1) {
+        weight_tensor_ = ttnn::reshape(weight_tensor_, Shape({weight_shape[0], weight_shape[1], weight_shape[2], 1}));
     }
 
     validate_weight_tensor(weight_tensor_);
@@ -945,11 +945,12 @@ std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weights_biases
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override) {
+    const bool parameters_on_device) {
     ttnn::Tensor weight_tensor_ = weight_tensor;  // tensor to return
-    if (weight_shape_override.has_value()) {
-        weight_tensor_ = ttnn::reshape(weight_tensor_, weight_shape_override.value());
+    Shape weight_shape = weight_tensor.get_logical_shape();
+    // In case of 1D convolution and 3D weight tensor, reinterpret it as 4D tensor
+    if (weight_shape.rank() == 3 && input_width == 1) {
+        weight_tensor_ = ttnn::reshape(weight_tensor_, Shape({weight_shape[0], weight_shape[1], weight_shape[2], 1}));
     }
     validate_weight_tensor(weight_tensor_);
     ttnn::Tensor bias_tensor_;
@@ -1086,7 +1087,6 @@ ttnn::Tensor prepare_conv_weights(
     auto [output_height, output_width] =
         calculate_output_image_size({input_height, input_width}, kernel_size, stride, padding_n4, dilation);
 
-
     auto opt_conv_op_block_config = get_opt_block_config(
         mm_conv,
         in_channels,
@@ -1142,11 +1142,6 @@ ttnn::Tensor prepare_conv_weights(
     ttnn::Tensor weight_tensor_on_device = weight_tensor;
     std::optional<ttnn::Tensor> bias_tensor_on_device = bias_tensor;
 
-    // Override weight shape if 1D conv with 3D weight tensor
-    std::optional<ttnn::Shape> weight_shape_override = std::nullopt;
-    if (is_1d_conv(kernel_size[1], input_width) && weight_tensor.get_logical_shape().rank() == 3) {
-        weight_shape_override = ttnn::Shape({out_channels, in_channels / groups, kernel_size[0], 1});
-    }
     tie(weight_tensor_on_device, bias_tensor_on_device) = prepare_conv_weights_biases_and_move_to_device(
         weight_tensor,
         bias_tensor,
@@ -1160,8 +1155,8 @@ ttnn::Tensor prepare_conv_weights(
         groups,
         opt_conv_op_block_config.act_block_h_ntiles,
         input_width,
-        true,  // setting to default value
-        weight_shape_override);
+        true  // setting to default value
+    );
 
     return weight_tensor_on_device;
 }
@@ -1315,8 +1310,7 @@ template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weigh
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override);
+    const bool parameters_on_device);
 
 template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weights_biases_on_device<MeshDevice>(
     const ttnn::Tensor& weight_tensor,
@@ -1331,8 +1325,7 @@ template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weigh
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override);
+    const bool parameters_on_device);
 
 template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weights_biases_and_move_to_device<IDevice>(
     const ttnn::Tensor& weight_tensor,
@@ -1347,8 +1340,7 @@ template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>> prepare_conv_weigh
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override);
+    const bool parameters_on_device);
 
 template std::pair<ttnn::Tensor, std::optional<ttnn::Tensor>>
 prepare_conv_weights_biases_and_move_to_device<MeshDevice>(
@@ -1364,8 +1356,7 @@ prepare_conv_weights_biases_and_move_to_device<MeshDevice>(
     uint32_t groups,
     uint32_t act_block_h_ntiles,
     uint32_t input_width,
-    const bool parameters_on_device,
-    std::optional<ttnn::Shape> weight_shape_override);
+    const bool parameters_on_device);
 
 template ttnn::Tensor prepare_conv_bias<IDevice>(
     const ttnn::Tensor& bias_tensor,
