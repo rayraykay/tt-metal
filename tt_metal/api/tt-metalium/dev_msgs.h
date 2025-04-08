@@ -317,7 +317,11 @@ struct addressable_core_t {
 // TODO: This can move into the hal eventually, currently sized for WH.
 // This is the number of Ethernet cores on WH (Ethernet cores can be queried through Virtual Coordinates).
 // All other Non Worker Cores are not accessible through virtual coordinates. Subject to change, depending on the arch.
+#ifdef ARCH_BLACKHOLE
+constexpr static std::uint32_t MAX_VIRTUAL_NON_WORKER_CORES = 24 + 1 + 14;
+#else
 constexpr static std::uint32_t MAX_VIRTUAL_NON_WORKER_CORES = 18;
+#endif
 // This is the total number of Non Worker Cores on WH (first term is DRAM, second term is PCIe and last term is
 // DRAM).
 constexpr static std::uint32_t MAX_PHYSICAL_NON_WORKER_CORES = 24 + 1 + 14;

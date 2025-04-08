@@ -360,7 +360,7 @@ std::unique_ptr<Allocator> Device::initialize_allocator(size_t l1_small_size, si
     // Tensix/Eth <-> Tensix/Eth src and dst addrs must be L1_ALIGNMENT aligned
     const auto &logical_size = this->logical_grid_size();
     const auto &compute_size = this->compute_with_storage_grid_size();
-    std::cout << "num dram banks " << static_cast<size_t>(soc_desc.get_num_dram_views()) << std::endl;
+    // std::cout << "num dram banks " << static_cast<size_t>(soc_desc.get_num_dram_views()) << std::endl;
     AllocatorConfig config(
         {.num_dram_channels = static_cast<size_t>(soc_desc.get_num_dram_views()),
          .dram_bank_size = soc_desc.dram_view_size,
@@ -467,7 +467,7 @@ void Device::initialize_firmware(const HalProgrammableCoreType &core_type, CoreC
 
     switch (core_type) {
         case HalProgrammableCoreType::TENSIX: {
-            std::cout << "init fw for " << virtual_core.str() << std::endl;
+            // std::cout << "init fw for " << virtual_core.str() << std::endl;
             for (uint32_t processor_class = 0; processor_class < processor_class_count; processor_class++) {
                 auto [build_idx, num_build_states] =
                     BuildEnvManager::get_instance().get_build_index_and_state_count(core_type_idx, processor_class);
@@ -733,8 +733,10 @@ void Device::initialize_and_launch_firmware() {
     core_info->noc_dram_addr_end = soc_d.dram_core_size;
 
     auto pcie_cores = soc_d.get_cores(CoreType::PCIE, soc_d.get_umd_coord_system());
-    auto dram_cores = soc_d.get_cores(CoreType::DRAM, soc_d.get_umd_coord_system());
-    auto eth_cores = soc_d.get_cores(CoreType::ETH, CoordSystem::PHYSICAL);
+    auto dram_cores = soc_d.get_cores(
+        CoreType::DRAM, soc_d.get_umd_coord_system());  // make these translated and then convert to physical
+    auto eth_cores =
+        soc_d.get_cores(CoreType::ETH, CoordSystem::PHYSICAL);  // make these translated and then convert to physical
     // The SOC descriptor can list a dram core multiple times, depending on how GDDR is assigned to banks
     // Get a list of unique DRAM cores.
     std::unordered_set<CoreCoord> unique_dram_cores(dram_cores.begin(), dram_cores.end());
@@ -757,26 +759,34 @@ void Device::initialize_and_launch_firmware() {
     // `non_worker_cores` for BH DRAM when virtualization is enabled
     int non_worker_cores_idx = 0;
     for (tt::umd::CoreCoord core : pcie_cores) {
-        std::cout << "pcie core is " << core.str() << " virtual is "
-                  << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
-                  << std::endl;
+        // std::cout << "pcie core is " << core.str() << " virtual is "
+        //           << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
+        //           << std::endl;
         tt::umd::CoreCoord translated_coord =
             soc_d.translate_coord_to(core, CoordSystem::PHYSICAL, CoordSystem::VIRTUAL);
-        std::cout << "\tupdated to " << translated_coord.str() << std::endl;
+        // std::cout << "\tupdated to " << translated_coord.str() << std::endl;
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::PCIE};
     }
     bool skip_physical_dram = this->arch() == ARCH::BLACKHOLE and hal.is_coordinate_virtualization_enabled();
     if (not skip_physical_dram) {
         for (tt::umd::CoreCoord core : dram_cores) {
-            std::cout << "dram core is " << core.str() << " virtual is "
-                    << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(), core).str()
-                    << std::endl;
+            // std::cout << "dram core is " << core.str() << " virtual is "
+            //         << tt::Cluster::instance().get_virtual_coordinate_from_physical_coordinates(this->id(),
+            //         core).str()
+            //         << std::endl;
             core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::DRAM};
         }
     }
     for (tt::umd::CoreCoord core : eth_cores) {
         core_info->non_worker_cores[non_worker_cores_idx++] = {core.x, core.y, AddressableCoreType::ETH};
     }
+
+    // std::cout << "non_worker_cores_idx " << non_worker_cores_idx << std::endl;
+    // for (int i = 0; i < non_worker_cores_idx; i++) {
+    //     std::cout << "physical (" << (uint32_t)core_info->non_worker_cores[i].x << ", "
+    //               << (uint32_t)core_info->non_worker_cores[i].y << ")" << std::endl;
+    // }
+
     if (hal_ref.is_coordinate_virtualization_enabled()) {
         // Track Virtual Non Worker Cores (In this case only Eth) separately
         uint32_t virtual_non_worker_cores_idx = 0;
@@ -784,6 +794,7 @@ void Device::initialize_and_launch_firmware() {
             auto virtual_core = this->virtual_core_from_physical_core({core.x, core.y});
             core_info->virtual_non_worker_cores[virtual_non_worker_cores_idx++] = {virtual_core.x, virtual_core.y, AddressableCoreType::ETH};
         }
+        // std::cout << "virtual non worker core idx " << virtual_non_worker_cores_idx << std::endl;
 
         if (this->arch() == ARCH::BLACKHOLE) {
             for (const CoreCoord& core : pcie_cores) {
@@ -791,12 +802,16 @@ void Device::initialize_and_launch_firmware() {
                 core_info->virtual_non_worker_cores[virtual_non_worker_cores_idx++] = {
                     virtual_core.x, virtual_core.y, AddressableCoreType::PCIE};
             }
+            // std::cout << "virtual non worker core idx " << virtual_non_worker_cores_idx << std::endl;
+            auto translated_dram_cores = soc_d.get_cores(CoreType::DRAM, CoordSystem::TRANSLATED);
 
-            for (const CoreCoord& core : unique_dram_cores) {
-                auto virtual_core = this->virtual_core_from_physical_core({core.x, core.y});
+            for (const CoreCoord& core : translated_dram_cores) {
+                // auto virtual_core = this->virtual_core_from_physical_core({core.x, core.y});
+                // std::cout << "Adding virtual dram core " << core.str() << std::endl;
                 core_info->virtual_non_worker_cores[virtual_non_worker_cores_idx++] = {
-                    virtual_core.x, virtual_core.y, AddressableCoreType::DRAM};
+                    core.x, core.y, AddressableCoreType::DRAM};
             }
+            // std::cout << "virtual non worker core idx " << virtual_non_worker_cores_idx << std::endl;
         }
     }
 
@@ -806,9 +821,11 @@ void Device::initialize_and_launch_firmware() {
         tt::tt_metal::MetalContext::instance().get_cluster().get_soc_desc(this->id()).arch, tt::tt_metal::MetalContext::instance().get_cluster().get_harvesting_mask(this->id()));
     uint32_t max_along_axis =
         hal.get_tensix_harvest_axis() == HalTensixHarvestAxis::ROW ? soc_d.grid_size.y : soc_d.grid_size.x;
-    for (uint32_t idx = 0; idx < max_along_axis; idx++) {  // upddate for col harvesting
+    // std::cout << "max along axis " << max_along_axis << " x " << soc_d.grid_size.x << std::endl;
+    for (uint32_t idx = 0; idx < max_along_axis; idx++) {
         bool harvested_axis = (harvested_noc_coords >> idx) & 0x1;
         if (harvested_axis) {
+            // std::cout << "tensix column " << idx << " harvested " << std::endl;
             harvested_axis_coord.push_back(idx);
         }
     }
@@ -1085,7 +1102,7 @@ void Device::init_command_queue_device() {
         this->compile_command_queue_programs();
     }
 
-    std::cout << "num cq program " << this->command_queue_programs_.size() << std::endl;
+    // std::cout << "num cq program " << this->command_queue_programs_.size() << std::endl;
     TT_ASSERT(this->command_queue_programs_.size() == 1);
     this->configure_command_queue_programs();
     Program& command_queue_program = *this->command_queue_programs_[0];
@@ -1185,7 +1202,7 @@ bool Device::close() {
         TT_THROW("Cannot close device {} that has not been initialized!", this->id_);
     }
 
-    std::cout << "in close" << std::endl;
+    // std::cout << "in close" << std::endl;
 
     for (const auto& hw_command_queue : command_queues_) {
         if (hw_command_queue->sysmem_manager().get_bypass_mode()) {
@@ -1211,7 +1228,7 @@ bool Device::close() {
     DprintServerDetach(this->id());
     watcher_detach(this->id());
 
-    std::cout << "watcher de" << std::endl;
+    // std::cout << "watcher de" << std::endl;
 
     // Assert worker cores
     CoreCoord grid_size = this->logical_grid_size();
@@ -1243,7 +1260,7 @@ bool Device::close() {
         }
     }
 
-    std::cout << "at this" << std::endl;
+    // std::cout << "at this" << std::endl;
 
     if (this->id_ != mmio_device_id) {
         for (auto it = not_done_dispatch_cores[mmio_device_id].begin(); it != not_done_dispatch_cores[mmio_device_id].end(); it++) {
@@ -1260,7 +1277,7 @@ bool Device::close() {
 
     tt::tt_metal::MetalContext::instance().get_cluster().l1_barrier(id_);
 
-    std::cout << "l1 barrier" << std::endl;
+    // std::cout << "l1 barrier" << std::endl;
 
     this->compute_cores_.clear();
     this->storage_only_cores_.clear();
@@ -1627,8 +1644,11 @@ void Device::generate_device_bank_to_noc_tables()
     dram_bank_offset_map_.clear();
     dram_bank_offset_map_.resize(num_dram_banks);
     for (unsigned bank_id = 0; bank_id < num_dram_banks; bank_id++) {
+        // std::cout << "bank " << bank_id << " ch " << allocator->get_dram_channel_from_bank_id(bank_id);
         auto physical_dram_core = this->dram_core_from_dram_channel(allocator->get_dram_channel_from_bank_id(bank_id));
-        dram_noc_coord_per_bank[bank_id] = this->virtual_core_from_physical_core(physical_dram_core);
+        // dram_noc_coord_per_bank[bank_id] = this->virtual_core_from_physical_core(physical_dram_core);
+        // std::cout << " physical_dram_core " << physical_dram_core.str() << std::endl;
+        dram_noc_coord_per_bank[bank_id] = physical_dram_core;
         dram_bank_offset_map_[bank_id] = allocator->get_bank_offset(BufferType::DRAM, bank_id);
     }
     const size_t num_l1_banks = allocator->get_num_banks(BufferType::L1);
@@ -1653,6 +1673,7 @@ void Device::generate_device_bank_to_noc_tables()
             if (dram_is_virtualized) {
                 noc_x = dram_noc_coord_per_bank[bank_id].x;
                 noc_y = dram_noc_coord_per_bank[bank_id].y;
+                // std::cout << "bank " << bank_id << " " << (uint32_t)noc_x << " " << (uint32_t)noc_y << std::endl;
             } else {
                 noc_x = tt::tt_metal::hal.noc_coordinate(noc, soc_d.grid_size.x, dram_noc_coord_per_bank[bank_id].x);
                 noc_y = tt::tt_metal::hal.noc_coordinate(noc, soc_d.grid_size.y, dram_noc_coord_per_bank[bank_id].y);

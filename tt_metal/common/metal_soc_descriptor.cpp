@@ -120,6 +120,8 @@ void metal_SocDescriptor::load_dram_metadata_from_device_descriptor() {
         size_t address_offset = dram_view["address_offset"].as<size_t>();
 
         if (channel >= get_grid_size(CoreType::DRAM).x) {
+            // dram can be harvested but we don't have unique soc desc for diff harvesting...
+            break;
             TT_THROW(
                 "DRAM channel {} does not exist in the device descriptor, but is specified in dram_view.channel",
                 channel);
@@ -139,10 +141,11 @@ void metal_SocDescriptor::load_dram_metadata_from_device_descriptor() {
 
         this->dram_view_channels.push_back(channel);
         tt::umd::CoreCoord eth_dram_endpoint_coord =
-            get_dram_core_for_channel(channel, eth_endpoint, CoordSystem::VIRTUAL);
+            get_dram_core_for_channel(channel, eth_endpoint, CoordSystem::TRANSLATED);
         this->dram_view_eth_cores.push_back({eth_dram_endpoint_coord.x, eth_dram_endpoint_coord.y});
         tt::umd::CoreCoord worker_endpoint_coord =
-            get_dram_core_for_channel(channel, worker_endpoint, CoordSystem::VIRTUAL);
+            get_dram_core_for_channel(channel, worker_endpoint, CoordSystem::TRANSLATED);
+        std::cout << " worker_endpoint_coord " << worker_endpoint_coord.str() << std::endl;
         this->dram_view_worker_cores.push_back({worker_endpoint_coord.x, worker_endpoint_coord.y});
         this->dram_view_address_offsets.push_back(address_offset);
     }
