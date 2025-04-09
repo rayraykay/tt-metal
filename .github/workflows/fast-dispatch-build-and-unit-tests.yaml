@@ -63,6 +63,9 @@ jobs:
           docker_opts: |
             -e ARCH_NAME=${{ inputs.arch }}
             -e GITHUB_ACTIONS=true
+            -e TT_METAL_WATCHER=1
+            -e TT_METAL_WATCHER_APPEND=1
+            -e TT_METAL_WATCHER_NOINLINE=1
           run_args: |
             ${{ matrix.test-group.cmd }}
       - uses: tenstorrent/tt-metal/.github/actions/slack-report@main
