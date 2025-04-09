@@ -672,7 +672,7 @@ void InitDeviceProfiler(IDevice* device) {
 
         std::vector<uint32_t> inputs_DRAM(
             tt_metal_device_profiler_map.at(device_id).output_dram_buffer->size() / sizeof(uint32_t), 0);
-        tt_metal::detail::WriteToBuffer(tt_metal_device_profiler_map.at(device_id).output_dram_buffer, inputs_DRAM);
+        // tt_metal::detail::WriteToBuffer(tt_metal_device_profiler_map.at(device_id).output_dram_buffer, inputs_DRAM);
     }
 #endif
 }

@@ -45,6 +45,7 @@ extern uint32_t sumIDs[SUM_COUNT];
 constexpr uint32_t QUICK_PUSH_MARKER_COUNT = 2;
 constexpr int WALL_CLOCK_HIGH_INDEX = 1;
 constexpr int WALL_CLOCK_LOW_INDEX = 0;
+constexpr uint32_t MAX_RAW_DATA_PAYLOAD_SIZE = 255;
 
 volatile tt_l1_ptr uint32_t* profiler_control_buffer =
     reinterpret_cast<volatile tt_l1_ptr uint32_t*>(GET_MAILBOX_ADDRESS_DEV(profiler.control_vector));
@@ -405,6 +406,35 @@ inline __attribute__((always_inline)) void recordEvent(uint16_t event_id) {
         wIndex += PROFILER_L1_MARKER_UINT32_SIZE;
     }
 }
+
+// Creates a RAW_DATA packet with the given payload
+// Returns true if packet was successfully created, false if buffer is full or payload is too large
+// payload_size is in bytes and must be a multiple of 4
+template <uint32_t payload_size, DoingDispatch dispatch = DoingDispatch::NOT_DISPATCH>
+inline bool create_raw_data_packet(const uint32_t header, const volatile tt_l1_ptr uint32_t* payload) {
+    static_assert((payload_size & 3) == 0, "payload_size must be a multiple of 4 bytes");
+    static_assert(payload_size <= MAX_RAW_DATA_PAYLOAD_SIZE, "payload_size exceeds maximum allowed size");
+    if (!bufferHasRoom<dispatch>()) {
+        return false;
+    }
+
+    // Calculate number of uint32 words needed for payload
+    constexpr auto compile_time_id = 0x80000000 | ((get_const_id(payload_size, RAW_DATA) & 0x7FFFF) << 12);
+    profiler_data_buffer[myRiscID][wIndex++] = compile_time_id;
+
+    // prepend header bytes
+    profiler_data_buffer[myRiscID][wIndex++] = header;
+
+    // Copy payload data word by word
+    constexpr uint32_t payload_words = payload_size / 4;
+#pragma GCC unroll MAX_RAW_DATA_PAYLOAD_SIZE / 4
+    for (uint32_t i = 0; i < payload_words; i++) {
+        profiler_data_buffer[myRiscID][wIndex++] = payload[i];
+    }
+
+    return true;
+}
+
 }  // namespace kernel_profiler
 
 #include "noc_event_profiler.hpp"
@@ -503,5 +533,6 @@ inline __attribute__((always_inline)) void recordEvent(uint16_t event_id) {
 #define RECORD_NOC_EVENT_WITH_ADDR(type, noc_addr, num_bytes, vc)
 #define RECORD_NOC_EVENT_WITH_ID(type, noc_id, num_bytes, vc)
 #define RECORD_NOC_EVENT(type)
+#define RECORD_FABRIC_HEADER(fabric_header_ptr, fabric_header_size)
 
 #endif

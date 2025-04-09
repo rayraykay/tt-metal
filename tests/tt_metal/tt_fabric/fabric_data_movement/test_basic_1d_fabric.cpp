@@ -163,6 +163,9 @@ TEST_F(Fabric1DFixture, TestUnicastRaw) {
     this->WaitForSingleProgramDone(sender_device, sender_program);
     this->WaitForSingleProgramDone(receiver_device, receiver_program);
 
+    DumpDeviceProfileResults(sender_device, sender_program);
+    DumpDeviceProfileResults(receiver_device, receiver_program);
+
     // Validate the status and packets processed by sender and receiver
     std::vector<uint32_t> sender_status;
     std::vector<uint32_t> receiver_status;

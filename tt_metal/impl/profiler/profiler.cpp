@@ -35,6 +35,7 @@
 #include <umd/device/tt_core_coordinates.h>
 #include <umd/device/types/arch.h>
 #include <umd/device/types/xy_pair.h>
+#include <tt-metalium/fabric_edm_packet_header.hpp>
 
 namespace tt {
 
@@ -132,13 +133,19 @@ void DeviceProfiler::readRiscProfilerResults(
             uint32_t opTime_H = 0;
             uint32_t opTime_L = 0;
             std::string opname;
+
+            auto handle_raw_data_packet = [](uint32_t* buffer, int& index, uint32_t packet_size) {};
+
+            log_info("Processing buffer for RISC {} buffer size {} words", tracy::riscName[riscNum], bufferEndIndex);
             for (int index = bufferRiscShift; index < (bufferRiscShift + bufferEndIndex);
                  index += kernel_profiler::PROFILER_L1_MARKER_UINT32_SIZE) {
                 if (!newRunStart && profile_buffer[index] == 0 && profile_buffer[index + 1] == 0) {
                     newRunStart = true;
                     opTime_H = 0;
                     opTime_L = 0;
+                    // log_info("    Index {}: initialize", index);
                 } else if (newRunStart) {
+                    // log_info("    Index {}: new run start", index);
                     newRunStart = false;
 
                     // TODO(MO): Cleanup magic numbers
@@ -153,7 +160,62 @@ void DeviceProfiler::readRiscProfilerResults(
                     uint32_t timer_id = (profile_buffer[index] >> 12) & 0x7FFFF;
                     kernel_profiler::PacketTypes packet_type = get_packet_type(timer_id);
 
+                    log_info(
+                        "    Index {:03d}: TYPE={:10s} TIMER_ID={:08x} DATA={:08x} {:08x} {:08x} {:08x}",
+                        index - bufferRiscShift,
+                        magic_enum::enum_name(packet_type),
+                        timer_id,
+                        profile_buffer[index],
+                        profile_buffer[index + 1],
+                        profile_buffer[index + 2],
+                        profile_buffer[index + 3]);
                     switch (packet_type) {
+                        case kernel_profiler::PacketTypes::RAW_DATA: {
+                            // For RAW_DATA packets, timer_id contains the packet size
+                            uint32_t packet_size = timer_id & 0xFFFF;
+                            index++;  // advance beyond timer_id
+
+                            // Skip header word
+                            if (profile_buffer[index++] != 0xFCF5FCF5) {
+                                log_warning("    NON-FABRIC RAW_DATA PACKET!");
+                            }
+
+                            // copy all words from profiler_buffer into a temp buffer
+                            uint32_t payload_words = (packet_size + 3) / 4;
+                            std::array<uint8_t, 256> payload;
+                            std::memcpy(payload.data(), &profile_buffer[index], packet_size);
+
+                            tt_fabric::NocCommandFields command_fields = {};
+                            uint16_t payload_size_bytes;
+                            tt_fabric::NocSendType noc_send_type;
+
+                            std::memcpy(&command_fields, payload.data(), sizeof(tt_fabric::NocCommandFields));
+                            std::memcpy(
+                                &payload_size_bytes,
+                                payload.data() + sizeof(tt_fabric::NocCommandFields),
+                                sizeof(uint16_t));
+                            std::memcpy(
+                                &noc_send_type,
+                                payload.data() + sizeof(tt_fabric::NocCommandFields) + sizeof(uint16_t),
+                                sizeof(tt_fabric::NocSendType));
+
+                            log_info("    noc send type {}", magic_enum::enum_name(noc_send_type));
+                            log_info("    payload size {}", payload_size_bytes);
+
+                            if (noc_send_type == tt_fabric::NocSendType::NOC_UNICAST_WRITE) {
+                                tt_fabric::NocUnicastCommandHeader noc_unicast_command_header =
+                                    command_fields.unicast_write;
+                                uint64_t x = HalSingleton::getInstance().get_noc_ucast_addr_x(
+                                    noc_unicast_command_header.noc_address);
+                                uint64_t y = HalSingleton::getInstance().get_noc_ucast_addr_y(
+                                    noc_unicast_command_header.noc_address);
+                                log_info("    noc address {},{}", x, y);
+                            }
+
+                            // Skip over the raw data payload (rounded up to uint32 words)
+                            index += payload_words;
+
+                        } break;
                         case kernel_profiler::ZONE_START:
                         case kernel_profiler::ZONE_END: {
                             uint32_t time_H = profile_buffer[index] & 0xFFF;

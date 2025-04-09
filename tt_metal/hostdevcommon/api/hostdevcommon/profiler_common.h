@@ -54,7 +54,7 @@ enum ControlBuffer {
     PROFILER_DONE,
 };
 
-enum PacketTypes { ZONE_START, ZONE_END, ZONE_TOTAL, TS_DATA, TS_EVENT };
+enum PacketTypes { ZONE_START = 0, ZONE_END = 1, ZONE_TOTAL = 2, TS_DATA = 3, TS_EVENT = 4, RAW_DATA = 5 };
 
 // TODO: use data types in profile_msg_t rather than addresses/sizes
 constexpr static std::uint32_t PROFILER_L1_CONTROL_VECTOR_SIZE = 32;
