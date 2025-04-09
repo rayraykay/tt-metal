@@ -12,6 +12,7 @@
 #include "tt_fabric_interface.h"
 #include "eth_chan_noc_mapping.h"
 #include <type_traits>
+#include "debug/pause.h"
 
 namespace tt::tt_fabric {
 
@@ -415,9 +416,12 @@ inline void fabric_client_connect(
         (STREAM_REG_ADDR(STREAM_ID_NOC_RECEIVER_BUFFER_SPACE, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_REG_INDEX));
     client_interface->update_router_space =
         (STREAM_REG_ADDR(STREAM_ID_NOC_RECEIVER_BUFFER_SPACE, STREAM_REMOTE_DEST_BUF_SPACE_AVAILABLE_UPDATE_REG_INDEX));
+    // ERROR
     *(uint32_t*)(STREAM_REG_ADDR(STREAM_ID_NOC_RECEIVER_BUFFER_SPACE, STREAM_REMOTE_DEST_BUF_SIZE_REG_INDEX)) =
         client_interface->buffer_size;
 }
+
+inline void fabric_client_disconnect(volatile tt_l1_ptr fabric_pull_client_interface_t* client_interface) {}
 
 inline void fabric_client_disconnect(volatile tt_l1_ptr fabric_push_client_interface_t* client_interface) {
     // wait for slots to drain
@@ -897,7 +901,9 @@ inline void fabric_endpoint_init(tt_l1_ptr T client_interface, uint32_t outbound
     // TODO: Should not assume routing tables are immediately after the client interface
     // This should be a separate address we take in
     uint32_t routing_tables_offset = (uint32_t)client_interface + sizeof(*client_interface);
+    WAYPOINT("FEI0");
     zero_l1_buf((uint32_t*)client_interface, sizeof(*client_interface));
+    WAYPOINT("FEI1");
     client_interface->routing_tables_l1_offset = routing_tables_offset;
     client_interface->num_routing_planes = 1;
 

@@ -49,7 +49,8 @@ void kernel_main() {
     } else {
         volatile fabric_push_client_interface_t* client_interface =
             (volatile fabric_push_client_interface_t*)client_interface_addr;
-
+        DPRINT << "Outbound Eth CHan = " << outbound_eth_chan << " router_noc_xy = " << HEX() << router_noc_xy
+               << ENDL();
         fabric_endpoint_init<decltype(client_interface), RoutingType::ROUTING_TABLE>(
             client_interface, outbound_eth_chan);
         fabric_client_connect(client_interface, 0, dst_mesh_id, dst_device_id);

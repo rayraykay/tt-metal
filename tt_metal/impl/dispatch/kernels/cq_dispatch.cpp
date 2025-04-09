@@ -349,7 +349,6 @@ void relay_to_next_cb(
                             data_ptr,
                             get_noc_addr_helper(downstream_noc_xy, downstream_cb_data_ptr),
                             orphan_size);
-                        noc_async_writes_flushed();
                         length -= orphan_size;
                         xfer_size -= orphan_size;
                         downstream_cb_data_ptr += orphan_size;
@@ -390,7 +389,6 @@ void relay_to_next_cb(
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
             client_interface, data_ptr, get_noc_addr_helper(downstream_noc_xy, downstream_cb_data_ptr), xfer_size);
-        noc_async_writes_flushed();
 
         // Release pages to downstream (prefetch H)
         relay_cb_release_pages<
@@ -402,7 +400,6 @@ void relay_to_next_cb(
             my_noc_index,
             downstream_noc_xy,
             downstream_cb_sem_id>(client_interface, 1);
-        noc_async_writes_flushed();
 
         length -= xfer_size;
         data_ptr += xfer_size;
@@ -495,7 +492,6 @@ void process_write_linear(
                         dispatch_cb_blocks,
                         false>(nullptr, block_noc_writes_to_clear, rd_block_idx);
                 } else {
-                    noc_async_writes_flushed();
                     move_rd_to_next_block_and_release_pages<
                         upstream_mesh_id,
                         upstream_dev_id,
@@ -1321,8 +1317,7 @@ static inline bool process_cmd_h(
 
 void kernel_main() {
     if constexpr (use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
-        DPRINT << "dispatch_" << is_h_variant << is_d_variant
-               << ": start (fabric) outbound eth chan = " << outbound_eth_chan << ENDL();
+        DPRINT << "dispatch_" << is_h_variant << is_d_variant << ": start (fabric)" << ENDL();
         for (uint32_t i = 0; i < client_interface_rb_entries; ++i) {
             auto client_interface =
                 get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>();
@@ -1411,7 +1406,7 @@ void kernel_main() {
                 // Dispatch H upstream is remote Dispatch D
                 get_cb_page_and_release_pages<
                     upstream_mesh_id,
-                    1,
+                    upstream_dev_id,
                     fabric_router_noc_xy,
                     dispatch_cb_base,
                     dispatch_cb_blocks,
@@ -1450,6 +1445,7 @@ void kernel_main() {
     //     upstream_noc_xy,
     //     upstream_dispatch_cb_sem_id,
     //     dispatch_cb_pages_per_block>(block_noc_writes_to_clear);
+    WAYPOINT("DTDW");
     DPRINT << "dispatch_" << is_h_variant << is_d_variant << ": teardown" << ENDL();
     relay_cb_release_pages<
         is_h_variant,
@@ -1481,6 +1477,7 @@ void kernel_main() {
     cb_wait_all_pages<my_dispatch_cb_sem_id>(upstream_total_acquired_page_count);
 
     noc_async_full_barrier();
+    WAYPOINT("DTDD");
 
     DPRINT << "dispatch_" << is_h_variant << is_d_variant << ": out" << ENDL();
 }

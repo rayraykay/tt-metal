@@ -9,7 +9,7 @@
 //    double buffered ScratchBuf for out of band data (e.g., from DRAM)
 //  - syncs w/ dispatcher via 2 semaphores, page_ready, page_done
 
-#include "fabric_host_interface.h"
+#include "debug/pause.h"
 #include "tt_metal/impl/dispatch/kernels/cq_commands.hpp"
 #include "tt_metal/impl/dispatch/kernels/cq_common.hpp"
 #include "tt_metal/fabric/hw/inc/tt_fabric_api.h"
@@ -1313,11 +1313,10 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
     }
 
     // Connect to downstream
-    DPRINT << "Prefetch Relay inline all connect to " << downstream_mesh_id << " " << downstream_dev_id << ENDL();
     auto client_interface =
         get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>();
     tt::tt_fabric::fabric_client_connect(client_interface, 0, downstream_mesh_id, downstream_dev_id);
-    DPRINT << "Prefetch Relay inline all connected" << ENDL();
+
     uint32_t downstream_pages_left = (downstream_cb_end - downstream_data_ptr) >> downstream_cb_log_page_size;
     if (downstream_pages_left >= npages) {
         relay_cb_async_write<
@@ -1328,7 +1327,6 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
             client_interface, data_ptr, get_noc_addr_helper(downstream_noc_xy, downstream_data_ptr), length);
-        noc_async_writes_flushed();
         downstream_data_ptr += npages * downstream_cb_page_size;
     } else {
         uint32_t tail_pages = npages - downstream_pages_left;
@@ -1342,7 +1340,6 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
                 fabric_router_noc_xy,
                 tt::tt_fabric::ClientDataMode::RAW_DATA>(
                 client_interface, data_ptr, get_noc_addr_helper(downstream_noc_xy, downstream_data_ptr), available);
-            noc_async_writes_flushed();
             data_ptr += available;
             length -= available;
         }
@@ -1354,7 +1351,6 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
             fabric_router_noc_xy,
             tt::tt_fabric::ClientDataMode::RAW_DATA>(
             client_interface, data_ptr, get_noc_addr_helper(downstream_noc_xy, downstream_cb_base), length);
-        noc_async_writes_flushed();
         downstream_data_ptr = downstream_cb_base + tail_pages * downstream_cb_page_size;
     }
 
@@ -1367,11 +1363,9 @@ static uint32_t process_relay_inline_all(uint32_t data_ptr, uint32_t fence, bool
         my_noc_index,
         downstream_noc_xy,
         downstream_cb_sem_id>(client_interface, npages);
-    noc_async_writes_flushed();
 
     // Release connection
     tt::tt_fabric::fabric_client_disconnect(client_interface);
-    DPRINT << "Relay inline lal disconnected" << ENDL();
 
     return fence;
 }
@@ -1495,7 +1489,6 @@ void kernel_main_d() {
             my_noc_index,
             upstream_noc_xy,
             upstream_cb_sem_id>(client_interface, pages_to_free);
-        noc_async_writes_flushed();
         tt::tt_fabric::fabric_client_disconnect(client_interface);
 
         // Move to next page
@@ -1527,8 +1520,7 @@ void kernel_main_hd() {
 
 void kernel_main() {
     if constexpr (use_fabric(is_h_variant, is_d_variant, fabric_router_noc_xy)) {
-        DPRINT << "prefetcher_" << is_h_variant << is_d_variant
-               << ": start (fabric) outbound eth chan = " << outbound_eth_chan << ENDL();
+        DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": start (fabric)" << ENDL();
         for (uint32_t i = 0; i < client_interface_rb_entries; ++i) {
             auto client_interface =
                 get_fabric_interface<client_interface_addr, client_interface_rb_entries, client_interface_size>();
@@ -1537,6 +1529,11 @@ void kernel_main() {
 #else
             tt::tt_fabric::fabric_endpoint_init<decltype(client_interface), RoutingType::ROUTING_TABLE>(
                 client_interface, outbound_eth_chan);
+            // tt::tt_fabric::fabric_client_connect(client_interface, 0, downstream_mesh_id, downstream_dev_id);
+            // tt::tt_fabric::fabric_client_disconnect(client_interface);
+            // Initialize only the first interface.
+            // get_fabric_interface is commented out to only return the one at index 0
+            break;
 #endif
         }
         DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": initialization complete" << ENDL();
@@ -1555,10 +1552,14 @@ void kernel_main() {
     }
     IDLE_ERISC_RETURN();
 
+    DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": teardown" << ENDL();
+
+    WAYPOINT("PTDW");
     // Confirm expected number of pages, spinning here is a leak
     cb_wait_all_pages<my_downstream_cb_sem_id>(downstream_cb_pages);
 
     noc_async_full_barrier();
 
     DPRINT << "prefetcher_" << is_h_variant << is_d_variant << ": out" << ENDL();
+    WAYPOINT("PTDD");
 }

@@ -396,7 +396,6 @@ FORCE_INLINE void cb_block_release_pages(T client_interface, uint32_t& block_noc
         if constexpr (sem_is_remote) {
 #ifdef FVC_MODE_PULL
             tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
-#endif
             tt::tt_fabric::fabric_atomic_inc(
                 client_interface,
                 routing,
@@ -406,6 +405,22 @@ FORCE_INLINE void cb_block_release_pages(T client_interface, uint32_t& block_noc
                 get_noc_addr_helper(noc_xy, sem_addr),
                 cb_pages_per_block,
                 k_WrapBoundary);
+#else
+            tt::tt_fabric::fabric_atomic_inc<
+                decltype(client_interface),
+                ClientDataMode::PACKETIZED_DATA,
+                AsyncWriteMode::ALL,
+                RoutingType::ROUTING_TABLE>(
+                client_interface,
+                0,
+                (uint32_t)&client_interface->header_buffer[0],
+                mesh_id,
+                dev_id,
+                get_noc_addr_helper(noc_xy, sem_addr),
+                cb_pages_per_block,
+                k_WrapBoundary);
+            noc_async_writes_flushed();
+#endif
         } else {
             noc_semaphore_inc(get_noc_addr_helper(noc_xy, sem_addr), cb_pages_per_block, noc_idx);
         }
@@ -452,12 +467,17 @@ template <
     typename T>
 inline void relay_cb_async_write(T client_interface, uint32_t src_addr, uint64_t dst_addr, uint32_t size) {
     if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
+        size += tt::tt_fabric::PACKET_HEADER_SIZE_BYTES;
 #ifdef FVC_MODE_PULL
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
-#endif
-        size += tt::tt_fabric::PACKET_HEADER_SIZE_BYTES;
         tt::tt_fabric::fabric_async_write<decltype(client_interface), data_mode>(
             client_interface, routing, src_addr, mesh_id, dev_id, dst_addr, size, 0);
+#else
+        tt::tt_fabric::
+            fabric_async_write<decltype(client_interface), data_mode, AsyncWriteMode::ALL, RoutingType::ROUTING_TABLE>(
+                client_interface, 0, src_addr, mesh_id, dev_id, dst_addr, size, 0);
+        noc_async_writes_flushed();
+#endif
     } else {
         noc_async_write(src_addr, dst_addr, size);
     }
@@ -478,7 +498,6 @@ inline void relay_cb_release_pages(T client_interface, uint32_t n) {
     if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
 #ifdef FVC_MODE_PULL
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
-#endif
         tt::tt_fabric::fabric_atomic_inc(
             client_interface,
             routing,
@@ -488,8 +507,22 @@ inline void relay_cb_release_pages(T client_interface, uint32_t n) {
             get_noc_addr_helper(noc_xy, get_semaphore<fd_core_type>(sem_id)),
             n,
             k_WrapBoundary);
-#ifdef FVC_MODE_PULL
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
+#else
+        tt::tt_fabric::fabric_atomic_inc<
+            decltype(client_interface),
+            ClientDataMode::PACKETIZED_DATA,
+            AsyncWriteMode::ALL,
+            RoutingType::ROUTING_TABLE>(
+            client_interface,
+            0,
+            (uint32_t)&client_interface->header_buffer[0],
+            mesh_id,
+            dev_id,
+            get_noc_addr_helper(noc_xy, get_semaphore<fd_core_type>(sem_id)),
+            n,
+            k_WrapBoundary);
+        noc_async_writes_flushed();
 #endif
     } else {
         cb_release_pages<noc_idx, noc_xy, sem_id>(n);

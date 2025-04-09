@@ -45,6 +45,7 @@ volatile tt_l1_ptr fabric_router_l1_config_t* routing_table =
 #define SWITCH_THRESHOLD 0x3FFF
 
 void kernel_main() {
+    DPRINT << "Fabric Router Init" << ENDL();
     tt_fabric_init();
 #ifdef FVC_MODE_PULL
     fvc_inbound_pull_state_t fvc_inbound_state;
@@ -186,6 +187,7 @@ void kernel_main() {
         }
 #else
         if (fvc_outbound_state[curr_outbound_buffer].forward_data_from_fvc_buffer(eth_outbound_wrptr)) {
+            DPRINT << "Fabric Router forward_data_from_fvc_buffer" << ENDL();
             loop_count = 0;
         } else {
             if (*fvc_outbound_state[next_outbound_buffer].slot_credits ||
@@ -198,6 +200,7 @@ void kernel_main() {
 
         // Handle Ethernet Inbound Data
         if (fvc_inbound_state.get_curr_packet_valid<FVC_MODE_ROUTER>()) {
+            DPRINT << "Fabric Router get_curr_packet_valid inbound data" << ENDL();
             fvc_inbound_state.process_inbound_packet<FVC_MODE_ROUTER, router_direction>();
             loop_count = 0;
         }

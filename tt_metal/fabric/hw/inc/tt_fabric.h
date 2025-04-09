@@ -639,6 +639,7 @@ typedef struct fvc_inbound_push_state {
 
     template <uint8_t fvc_mode = FVC_MODE_ROUTER, uint32_t router_direction = 0>
     FORCE_INLINE __attribute__((optimize("jump-tables"))) void process_inbound_packet() {
+        DPRINT << "fvc inbound push state packet received " << packet_header->routing.atomic_increment << ENDL();
         tt_l1_ptr uint8_t* route_vector = (uint8_t*)packet_header->routing.route_vector.value;
         uint32_t hop_index = packet_header->routing.route_vector.hop_index;
         uint32_t hop_cmd = route_vector[hop_index];
@@ -785,6 +786,7 @@ typedef struct fvc_inbound_push_state {
 
     template <uint8_t fvc_mode = FVC_MODE_ROUTER, uint32_t router_direction = 0>
     FORCE_INLINE void process_inbound_packet() {
+        DPRINT << "fvc inbound process_inbound_packet state packet received" << ENDL();
         if (for_local_chip) {
             if (slots_cleared) {
                 flush_async_writes<fvc_mode, true>();
@@ -2034,6 +2036,7 @@ typedef struct fvcc_inbound_state {
 
     template <uint8_t fvc_mode = FVC_MODE_ROUTER>
     inline void process_inbound_packet() {
+        DPRINT << "fvc inbound state packet received" << ENDL();
         if (packet_is_for_local_chip()) {
             if (current_packet_header->routing.flags == SYNC) {
                 if (current_packet_header->session.command == SOCKET_OPEN or
