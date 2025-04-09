@@ -3,8 +3,6 @@ unsigned* instrn_buffer;
 }
 #include <sfpi.h>
 
-#include "debug/dprint.h"
-
 using namespace sfpi;
 
 static __attribute__((noinline)) void minusOne() {
@@ -31,7 +29,7 @@ static __attribute__((noinline)) void signOne() {
 
     vUInt notCorrect = value ^ signOne;
     // notCorrect will be zero
-    dst_reg[0] = not2sComp;
+    dst_reg[0] = notCorrect;
     // A non-zero value
     dst_reg[0] = value;
 }
@@ -142,9 +140,7 @@ static __attribute__((noinline)) void minusTwoLSR() {
 
 void kernel_main() {
     unsigned test_no = *(tt_l1_ptr uint32_t*)get_arg_addr(0);
-    volatile tt_l1_ptr std::uint32_t* result = (tt_l1_ptr uint32_t*)(l1_address);
-
-    DPRINT << test_no << '\n';
+    volatile tt_l1_ptr uint32_t* result = (tt_l1_ptr uint32_t*)(l1_address);
 
     switch (test_no) {
         case 0: minusOne(); break;
@@ -152,7 +148,7 @@ void kernel_main() {
         case 2: zeroMinusRegOne(); break;
         case 3: zeroPlusRegMinusOne(); break;
         case 4: zeroMinusConstOne(); break;
-        case 5: zerpPlusConstMinusOne(); break;
+        case 5: zeroPlusConstMinusOne(); break;
         case 6: minusTwoASR(); break;
         case 7: minusTwoLSR(); break;
     }
