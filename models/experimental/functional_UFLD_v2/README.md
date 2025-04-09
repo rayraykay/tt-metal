@@ -15,5 +15,20 @@ Resource link - [source](https://github.com/cfzd/Ultra-Fast-Lane-Detection-v2)
 - The model picks up trained weights from the **tusimple_res34.pth** file located at:`models/experimental/functional_UFLD_v2/reference/tusimple_res34.pth`
 - Batch Size :1
 
+Export the following command before running pytests on N300:
 
-### Owner: [Venkatesh](https://github.com/vguduruTT)
+`WH_ARCH_YAML=wormhole_b0_80_arch_eth_dispatch.yaml`
+
+Use the following command to run the model :
+
+`pytest tests/ttnn/integration_tests/UFLD_v2/test_ttnn_UFLD_v2.py::test_UFD_V2_Model`
+
+Use the following command to run the e2e perf:
+
+`pytest models/experimental/functional_UFLD_v2/tests/test_UFLD_v2_perf.py::test_ufld_v2_perf`
+
+Use the following command to run the e2e perf with trace:
+
+`pytest models/experimental/functional_UFLD_v2/tests/test_UFLD_v2_e2e_performant.py`
+
+#### Owner: [vguduruTT](https://github.com/vguduruTT)
