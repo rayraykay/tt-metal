@@ -12,9 +12,6 @@
 #include "cq_helpers.hpp"
 #include "tt_metal/fabric/hw/inc/tt_fabric_api.h"
 
-// Fabric and Client interface ring buffer indices
-// The ring buffer size must be a power of 2
-static uint32_t fabric_header_rb_index = 0;
 constexpr uint32_t k_WrapBoundary = 31;  // Fabric atomic inc
 
 // The command queue read interface controls reads from the issue region, host owns the issue region write interface
@@ -131,16 +128,27 @@ constexpr bool use_fabric(bool is_h_variant, bool is_d_variant, uint64_t fabric_
     return !(is_h_variant && is_d_variant) && fabric_router_xy != 0;
 }
 
+#ifdef FVC_MODE_PULL
+constexpr uint32_t client_interface_size = tt::tt_fabric::PULL_CLIENT_INTERFACE_SIZE;
 template <uint32_t interface_rb_base, uint32_t interface_rb_entries, uint32_t interface_size>
 inline volatile tt::tt_fabric::fabric_pull_client_interface_t* get_fabric_interface() {
+#else
+constexpr uint32_t client_interface_size = tt::tt_fabric::PUSH_CLIENT_INTERFACE_SIZE;
+template <uint32_t interface_rb_base, uint32_t interface_rb_entries, uint32_t interface_size>
+inline volatile tt::tt_fabric::fabric_push_client_interface_t* get_fabric_interface() {
+#endif
     static_assert(((interface_rb_entries) & ((interface_rb_entries)-1)) == 0);
     constexpr uint32_t rb_mask = interface_rb_entries - 1;
 
     static uint32_t fabric_client_interface_rb_index = 0;
 
     uint32_t addr = interface_rb_base + ((fabric_client_interface_rb_index & rb_mask) * interface_size);
-    fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
+    // fabric_client_interface_rb_index = fabric_client_interface_rb_index + 1;
+#ifdef FVC_MODE_PULL
     return reinterpret_cast<volatile tt::tt_fabric::fabric_pull_client_interface_t*>(addr);
+#else
+    return reinterpret_cast<volatile tt::tt_fabric::fabric_push_client_interface_t*>(addr);
+#endif
 }
 
 template <
@@ -364,6 +372,8 @@ cb_acquire_pages(uint32_t cb_fence, uint32_t block_next_start_addr[], uint32_t r
     return usable;
 }
 
+// Release pages blocks at a time
+// If the semaphore is on a remote, this function expects the caller to have already setup the connection
 template <
     uint16_t mesh_id,
     uint16_t dev_id,
@@ -384,7 +394,9 @@ FORCE_INLINE void cb_block_release_pages(T client_interface, uint32_t& block_noc
         while (!wrap_ge(NOC_STATUS_READ_REG(noc_index, NIU_MST_NONPOSTED_WR_REQ_SENT), block_noc_writes_to_clear));
 
         if constexpr (sem_is_remote) {
+#ifdef FVC_MODE_PULL
             tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
+#endif
             tt::tt_fabric::fabric_atomic_inc(
                 client_interface,
                 routing,
@@ -429,6 +441,7 @@ FORCE_INLINE void move_rd_to_next_block_and_release_pages(
     move_rd_to_next_block<cb_blocks>(rd_block_idx);
 }
 
+// If the destination is on a remote, this function expects the caller to have already setup the connection
 template <
     bool is_h_variant,
     bool is_d_variant,
@@ -437,10 +450,11 @@ template <
     uint32_t routing,
     tt::tt_fabric::ClientDataMode data_mode,
     typename T>
-inline void relay_cb_async_write(
-    T client_interface, uint32_t header_addr, uint32_t src_addr, uint64_t dst_addr, uint32_t size) {
+inline void relay_cb_async_write(T client_interface, uint32_t src_addr, uint64_t dst_addr, uint32_t size) {
     if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
+#ifdef FVC_MODE_PULL
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
+#endif
         size += tt::tt_fabric::PACKET_HEADER_SIZE_BYTES;
         tt::tt_fabric::fabric_async_write<decltype(client_interface), data_mode>(
             client_interface, routing, src_addr, mesh_id, dev_id, dst_addr, size, 0);
@@ -449,6 +463,7 @@ inline void relay_cb_async_write(
     }
 }
 
+// If the semaphore is on a remote, this function expects the caller to have already setup the connection
 template <
     bool is_h_variant,
     bool is_d_variant,
@@ -459,20 +474,23 @@ template <
     uint32_t noc_xy,
     uint32_t sem_id,
     typename T>
-inline void relay_cb_release_pages(T client_interface, uint32_t header, uint32_t n) {
+inline void relay_cb_release_pages(T client_interface, uint32_t n) {
     if constexpr (use_fabric(is_h_variant, is_d_variant, routing)) {
+#ifdef FVC_MODE_PULL
         tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
-        header = (uint32_t)&client_interface->header_buffer[0];  // remove
+#endif
         tt::tt_fabric::fabric_atomic_inc(
             client_interface,
             routing,
-            header,
+            (uint32_t)&client_interface->header_buffer[0],
             mesh_id,
             dev_id,
             get_noc_addr_helper(noc_xy, get_semaphore<fd_core_type>(sem_id)),
             n,
             k_WrapBoundary);
-        tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);  // Why is this needed?
+#ifdef FVC_MODE_PULL
+        tt::tt_fabric::fabric_wait_for_pull_request_flushed(client_interface);
+#endif
     } else {
         cb_release_pages<noc_idx, noc_xy, sem_id>(n);
     }

@@ -14,9 +14,7 @@ using namespace tt::tt_metal;
 
 int main() {
     // Initialize Program and Device
-    if (std::getenv("TT_METAL_FD_FABRIC")) {
-        tt::tt_metal::detail::InitializeFabricConfig(FabricConfig::FABRIC_2D);
-    }
+    tt::tt_metal::detail::InitializeFabricConfig(FabricConfig::FABRIC_2D_PUSH);
 
     constexpr CoreCoord core = {0, 0};
     int device_id = 1;
@@ -41,7 +39,9 @@ int main() {
     // Configure Program and Start Program Execution on Device
 
     SetRuntimeArgs(program, void_compute_kernel_id, core, {});
-    EnqueueProgram(cq, program, false);
+    for (int i = 0; i < 100000; ++i) {
+        EnqueueProgram(cq, program, false);
+    }
     printf("Hello, Core {0, 0} on Device 0, I am sending you a compute kernel. Standby awaiting communication.\n");
 
     // Wait Until Program Finishes, Print "Hello World!", and Close Device

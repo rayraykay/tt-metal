@@ -391,10 +391,11 @@ void PrefetchKernel::CreateKernel() {
         dependent_config_.fabric_router_noc_xy.value_or(0),
         static_config_.client_interface_addr.value_or(0),
         static_config_.header_rb_addr.value_or(0),
+        dependent_config_.outbound_eth_chan.value_or(0),
         static_config_.is_d_variant.value(),
         static_config_.is_h_variant.value(),
     };
-    TT_ASSERT(compile_args.size() == 35);
+    TT_ASSERT(compile_args.size() == 36);
     auto my_virtual_core = device_->virtual_core_from_logical_core(logical_core_, GetCoreType());
     auto upstream_virtual_core =
         device_->virtual_core_from_logical_core(dependent_config_.upstream_logical_core.value(), GetCoreType());
@@ -471,6 +472,7 @@ void PrefetchKernel::ConfigureCore() {
 
 void PrefetchKernel::UpdateArgsForFabric(
     const CoreCoord& fabric_router_virtual,
+    uint32_t outbound_eth_chan,
     tt::tt_fabric::mesh_id_t upstream_mesh_id,
     chip_id_t upstream_dev_id,
     tt::tt_fabric::mesh_id_t downstream_mesh_id,
@@ -481,6 +483,7 @@ void PrefetchKernel::UpdateArgsForFabric(
     dependent_config_.upstream_dev_id = upstream_dev_id;
     dependent_config_.downstream_mesh_id = downstream_mesh_id;
     dependent_config_.downstream_dev_id = downstream_dev_id;
+    dependent_config_.outbound_eth_chan = outbound_eth_chan;
 
     auto& my_dispatch_constants = DispatchMemMap::get(GetCoreType());
     static_config_.client_interface_addr =

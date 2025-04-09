@@ -144,6 +144,7 @@ void FDKernel::configure_kernel_variant(
     if (tt::tt_metal::MetalContext::instance().get_cluster().get_fabric_config() != FabricConfig::FABRIC_2D_PUSH) {
         defines["FVC_MODE_PULL"] = "1";
     }
+    defines["DISABLE_LOW_LATENCY_ROUTING"] = "";
     if (!DPrintServerReadsDispatchCores(device_->id())) {
         defines["FORCE_DPRINT_OFF"] = "1";
     }
