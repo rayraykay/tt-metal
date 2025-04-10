@@ -33,24 +33,14 @@ static Tensor create_config_tensor(
     const uint32_t scale_factor_h,
     const uint32_t scale_factor_w,
     const uint32_t ncores_x,
-    const bool is_height_sharded,
-    const bool is_col_major) {
+    const bool is_height_sharded) {
     uint16_t in_core = 0, curr_stick = 0;
     const uint32_t input_nsticks_per_core = shard_spec.shape[0];
 
     std::vector<std::vector<int>> core_range;
+    auto logical_cores = corerange_to_cores(
+        shard_spec.grid, shard_spec.num_cores(), shard_spec.orientation == ShardOrientation::ROW_MAJOR);
     auto ranges = shard_spec.grid.ranges();
-    // in case of height sharding and shards arranged in column major order, get cores where shard are placed.
-    if (is_col_major && is_height_sharded) {
-        for (auto i = 0; i < ranges.size(); i++) {
-            auto range = ranges[i];
-            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
-                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
-                    core_range.push_back({x, y});
-                }
-            }
-        }
-    }
 
     std::vector<uint16_t> logical_core_to_stick_map;
     size_t logical_core_to_stick_map_entry_size = 3;
@@ -62,9 +52,9 @@ static Tensor create_config_tensor(
                 if (curr_stick == input_nsticks_per_core) {
                     curr_stick = 0, ++in_core;
                 }
-                if (is_height_sharded && is_col_major) {
-                    logical_core_to_stick_map.push_back(core_range[in_core][0]);
-                    logical_core_to_stick_map.push_back(core_range[in_core][1]);
+                if (is_height_sharded) {
+                    logical_core_to_stick_map.push_back(logical_cores[in_core].x);
+                    logical_core_to_stick_map.push_back(logical_cores[in_core].y);
                 } else {
                     logical_core_to_stick_map.push_back(in_core);
                     logical_core_to_stick_map.push_back(0);
@@ -86,13 +76,8 @@ static Tensor create_config_tensor(
     CoreCoord core_coords;
     if (is_height_sharded) {
         for (size_t j = 0; j < logical_core_to_stick_map.size(); j += logical_core_to_stick_map_entry_size) {
-            if (is_col_major) {
-                core_coords = device->worker_core_from_logical_core(
-                    CoreCoord(logical_core_to_stick_map[j], logical_core_to_stick_map[j + 1]));
-            } else {
-                core_coords = device->worker_core_from_logical_core(
-                    CoreCoord(logical_core_to_stick_map[j] % ncores_x, logical_core_to_stick_map[j] / ncores_x));
-            }
+            core_coords = device->worker_core_from_logical_core(
+                CoreCoord(logical_core_to_stick_map[j], logical_core_to_stick_map[j + 1]));
             // Combine the x and y coordinates of the core into a single 16-bit value.
             // The x coordinate is shifted left by 8 bits and added to the y coordinate.
             uint16_t cores = (core_coords.x << 8) + core_coords.y;
@@ -224,8 +209,7 @@ operation::ProgramWithCallbacks upsample_multi_core(
             scale_factor_h,
             scale_factor_w,
             ncores_x,
-            input.memory_config().memory_layout == TensorMemoryLayout::HEIGHT_SHARDED,
-            shard_spec.orientation == ShardOrientation::COL_MAJOR);
+            input.memory_config().memory_layout == TensorMemoryLayout::HEIGHT_SHARDED);
     } else {
         TT_THROW("Unsupported sharding layout");
     }
@@ -291,11 +275,11 @@ operation::ProgramWithCallbacks upsample_multi_core(
             start_input_stick_id += input_nsticks_per_core;
         }
     } else if (input.memory_config().memory_layout == TensorMemoryLayout::HEIGHT_SHARDED) {
-        for (int32_t core = 0; core < ncores_nhw; ++core) {
-            CoreCoord core_coord(core % ncores_x, core / ncores_x);  // logical
+        auto cores = corerange_to_cores(all_cores);
+        for (auto core : cores) {
             writer_rt_args[6] = start_input_stick_id;
-            SetRuntimeArgs(program, writer_kernel, core_coord, writer_rt_args);
-            SetRuntimeArgs(program, reader_kernel, core_coord, writer_rt_args);
+            SetRuntimeArgs(program, writer_kernel, core, writer_rt_args);
+            SetRuntimeArgs(program, reader_kernel, core, writer_rt_args);
             start_input_stick_id += input_nsticks_per_core;
         }
     } else {
