@@ -95,6 +95,7 @@ template struct ExecuteUnary<UnaryOpType::ISNEGINF>;
 template struct ExecuteUnary<UnaryOpType::ISPOSINF>;
 template struct ExecuteUnary<UnaryOpType::LEZ>;
 template struct ExecuteUnary<UnaryOpType::LOG>;
+template struct ExecuteUnary<UnaryOpType::LOG1P>;
 template struct ExecuteUnary<UnaryOpType::LOG10>;
 template struct ExecuteUnary<UnaryOpType::LOG2>;
 template struct ExecuteUnary<UnaryOpType::LOGICAL_NOT_UNARY>;

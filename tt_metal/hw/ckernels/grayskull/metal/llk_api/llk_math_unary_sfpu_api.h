@@ -21,6 +21,7 @@
 #include "llk_math_eltwise_unary_sfpu_unary_comp.h"
 #include "llk_math_eltwise_unary_sfpu_fill.h"
 #include "llk_math_eltwise_unary_sfpu_i1.h"
+// #include "llk_math_eltwise_unary_sfpu_log1p.h"
 
 namespace ckernel {
 
@@ -38,6 +39,16 @@ inline void llk_math_eltwise_unary_sfpu_log(uint dst_index, int vector_mode = Ve
 template <bool APPROXIMATE>
 inline void llk_math_eltwise_unary_sfpu_log_init() {
     llk_math_eltwise_unary_sfpu_init<SfpuType::log, APPROXIMATE>();
+}
+
+template <bool APPROXIMATE>
+inline void llk_math_eltwise_unary_sfpu_log1p(uint dst_index, int vector_mode = VectorMode::RC) {
+    llk_math_eltwise_unary_sfpu<SfpuType::log1p, APPROXIMATE>(dst_index, vector_mode);
+}
+
+template <bool APPROXIMATE>
+inline void llk_math_eltwise_unary_sfpu_log1p_init() {
+    llk_math_eltwise_unary_sfpu_init<SfpuType::log1p, APPROXIMATE>();
 }
 
 // abs
