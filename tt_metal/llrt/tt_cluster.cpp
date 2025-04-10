@@ -293,13 +293,11 @@ void Cluster::open_driver(const bool &skip_driver_allocs) {
         uint32_t num_host_mem_ch_per_mmio_device = std::min(HOST_MEM_CHANNELS, (uint32_t)all_chips_set.size());
         // This will remove harvested rows from the soc descriptor
         const bool perform_harvesting = true;
-        const bool clean_system_resources = true;
         device_driver = std::make_unique<tt::umd::Cluster>(
             sdesc_path,
             all_chips_set,
             num_host_mem_ch_per_mmio_device,
             skip_driver_allocs,
-            clean_system_resources,
             perform_harvesting);
 
         // Adding this check is a workaround for current UMD bug that only uses this getter to populate private metadata
