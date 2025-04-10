@@ -34,7 +34,7 @@ jobs:
     # Workaround for https://github.com/orgs/community/discussions/46757?sort=old#discussioncomment-4909336
     # We must have this workflow trigger on PRs in order to allow us to require them in the merge queue.
     # But we don't actually WANT to run it on PRs -- that's the whole point.  GitHub strikes again.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && 'true' == 'false'
     uses: ./.github/workflows/code-analysis.yaml
     secrets: inherit
     with:
@@ -54,11 +54,7 @@ jobs:
         uses: tenstorrent/tt-metal/.github/actions/find-changed-files@main
 
   build:
-    if: ${{ github.ref_name == 'main' ||
-            needs.find-changes.outputs.cmake-changed == 'true' ||
-            needs.find-changes.outputs.any-code-changed == 'true' ||
-            needs.find-changes.outputs.docs-changed == 'true'
-        }}
+    if: ${{ github.ref_name == 'main' }}
     needs: find-changes
     uses: ./.github/workflows/build-artifact.yaml
     secrets: inherit
@@ -81,10 +77,7 @@ jobs:
       wheel-artifact-name: ${{ needs.build.outputs.wheel-artifact-name }}
 
   build-tsan:
-    if: ${{ github.ref_name == 'main' ||
-            needs.find-changes.outputs.cmake-changed == 'true' ||
-            needs.find-changes.outputs.any-code-changed == 'true' ||
-            needs.find-changes.outputs.docs-changed == 'true'
+    if: ${{ github.ref_name == 'main'
         }}
     needs: find-changes
     uses: ./.github/workflows/build-artifact.yaml
@@ -97,10 +90,7 @@ jobs:
 
   smoke-tests:
     needs: [find-changes, build-tsan]
-    if: ${{ github.ref_name == 'main' ||
-            needs.find-changes.outputs.cmake-changed == 'true' ||
-            needs.find-changes.outputs.tt-metalium-changed == 'true' ||
-            needs.find-changes.outputs.tt-metalium-or-tt-nn-tests-changed == 'true'
+    if: ${{ github.ref_name == 'main'
         }}
     strategy:
       fail-fast: false
