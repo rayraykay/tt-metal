@@ -4,6 +4,7 @@
 
 #include "command_queue_fixture.hpp"
 
+#include <tt-metalium/allocator.hpp>
 #include <tt-metalium/core_coord.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/kernel.hpp>
@@ -22,12 +23,27 @@ static constexpr std::string_view KernelDir = "tests/tt_metal/tt_metal/test_kern
 static bool runTest(tt::tt_metal::IDevice* device, const CoreCoord& coord, const std::string& path, unsigned baseLen) {
     const char* phase;
 
+    uint32_t args_addr = device->allocator()->get_base_allocator_addr(tt::tt_metal::HalMemType::L1);
+
+    std::vector<uint32_t> compile_args{args_addr};
+
     // FIXME: Should we build all these first, and then run them?
     auto program(tt::tt_metal::CreateProgram());
-    auto kernel = CreateKernel(program, path, coord, tt::tt_metal::ComputeConfig{});
+    auto kernel = CreateKernel(
+        program,
+        path,
+        coord,
+        tt::tt_metal::ComputeConfig{
+            .compile_args = compile_args,
+        });
     EnqueueProgram(device->command_queue(), program, false);
     Finish(device->command_queue());
 
+    tt::tt_metal::MetalContext::instance().get_cluster().l1_barrier(device->id());
+    auto noc_xy = device->worker_core_from_logical_core(coord);
+    std::vector<uint32_t> args =
+        tt::llrt::read_hex_vec_from_core(device->id(), noc_xy, args_addr, 3 * sizeof(uint32_t));
+    std::printf("%s: %08x, %08x, %08x\n", path.c_str(), args[0], args[1], args[2]);
     bool pass = true;
     std::printf("%s: %s\n", path.c_str() + baseLen + 1, pass ? "PASSED" : "FAILED");
     return pass;
