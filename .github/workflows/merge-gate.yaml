@@ -52,9 +52,14 @@ jobs:
     steps:
       - id: find-changes
         uses: tenstorrent/tt-metal/.github/actions/find-changed-files@main
+      - id: debug
+        shell: bash
+        run: |
+          echo "ref_name: ${{ github.ref_name }}"
+          echo "ref: ${{ github.ref }}"
 
   build:
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.ref_name == 'afuller/tsan-in-merge-gate' }}
     needs: find-changes
     uses: ./.github/workflows/build-artifact.yaml
     secrets: inherit
